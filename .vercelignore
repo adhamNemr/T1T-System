@@ -1,0 +1,7 @@
+node_modules
+.git
+dist_electron
+release
+*.dmg
+*.exe
+*.zip
