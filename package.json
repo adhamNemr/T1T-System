@@ -2,6 +2,13 @@
   "name": "t1t-cafe-system",
   "private": true,
   "version": "1.0.0",
+  "description": "A high-performance, secure, and visually stunning management system for premium cafes and stores.",
+  "author": "Adham Nemr",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adhamNemr/T1T-System.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",

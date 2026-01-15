@@ -4,6 +4,11 @@
 
 A high-performance, secure, and visually stunning management system tailored for premium cafes and stores. Built with modern web technologies, it offers a seamless experience for tracking sales, managing expenses, and monitoring performance with surgical precision.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-47848F?style=flat&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.io/)
+
 ## 🚀 Core Features
 
 - **Dynamic Fiscal Month Management**: Custom billing cycles (e.g., from the 6th of each month to the 5th of the next) to match business operational realities.
@@ -13,6 +18,13 @@ A high-performance, secure, and visually stunning management system tailored for
 - **Pro Analytics & Reporting**: Generate detailed Excel reports for daily shifts and monthly performance with a single click.
 - **Role-Based Security**: Encrypted authentication for Super Admins and Staff, with protected management views.
 - **Anti-Tamper Protection**: Disabled context menus and DevTools shortcuts to ensure system integrity during production.
+
+## 🛠️ Technical Highlights
+
+- **Real-time Cloud Sync**: Integrated with **Supabase** for instant data synchronization across multiple devices.
+- **Offline Resilience**: Uses **Electron Store** for local data persistence, ensuring zero downtime even without internet.
+- **Surgical Performance**: Optimized React rendering with **Framer Motion** for a smooth, app-like experience.
+- **Financial Accuracy**: Custom-built Excel engine using **ExcelJS** for pixel-perfect accounting reports.
 
 ---
 
@@ -56,24 +68,25 @@ Full control over staff accounts, roles (Super Admin/User), and shift assignment
 
 ## 📦 Build & Installation
 
-### Windows Version
-1. Go to `Client_Package/Windows/`.
-2. Run `T1T_System_Windows_x64.exe` to install the system on the client's PC.
-
-### macOS Version
-1. Go to `Client_Package/Mac/`.
-2. Open `T1T_System_Mac_Arm64.dmg` and drag the app to your Applications folder.
-
 ### Development Mode
 ```bash
 # Install dependencies
 npm install
 
-# Run the dev server
+# Run the dev server (Web)
 npm run dev
 
-# Build for production
+# Run in Electron (Desktop)
+npm run electron:dev
+```
+
+### Production Build
+```bash
+# Build for Web
 npm run build
+
+# Build for Desktop (Installer)
+npm run electron:build
 ```
 
 ---
