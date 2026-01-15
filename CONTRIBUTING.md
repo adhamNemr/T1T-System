@@ -2,7 +2,7 @@
 
 First off, thank you for considering contributing to the T1T System! It's people like you that make the open-source community such an amazing place to learn, inspire, and create.
 
-## 🌈 How Can I Contribute?
+## How Can I Contribute?
 
 ### Reporting Bugs
 If you find a bug, please open an issue and include:
