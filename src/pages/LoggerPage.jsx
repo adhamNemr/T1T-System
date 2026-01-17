@@ -50,48 +50,35 @@ export const LoggerPage = React.memo(({
   const isLocked = isMonthlyMode || (!isSuper && isAlreadyFinished);
   
   // 🧮 Logic Update: Total Sales = Cash In Hand + Total Expenses
-  // We derive current total expenses from the entry being edited
   const currentExpenses = currentEntry.expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   
-  // For the Summary Cards, we use the values from currentEntry to ensure immediate reactivity
   const totalExp = currentExpenses;
   const totalSalesFromState = Number(currentEntry.sales) || 0;
   
-  // Calculate Cash In Hand (The money the user actually sees in the drawer)
   const cashInHand = totalSalesFromState - totalExp;
 
-  // In Monthly mode, we show Total Sales first. In Daily mode, we show Cash as the primary input.
   const card1Title = isMonthlyMode ? "إجمالي مبيعات الشهر" : "المبلغ (الكاش)";
   const card1Value = isMonthlyMode ? totalSalesFromState : cashInHand;
   
   const card3Title = isMonthlyMode ? "صافي الشهر" : "إجمالي المبيعات";
   const card3Value = isMonthlyMode ? (totalSalesFromState - totalExp) : totalSalesFromState;
 
-  // 📝 Table Logic: Use aggregated breakdown for Monthly, but detailed list for Daily (to allow editing)
-  // 📝 Table Logic: Order by Shift (Admin) and keep Daily Wage (fixed-daily) at top
   const baseExpenses = isMonthlyMode ? todayAllExpenses : currentEntry.expenses;
   const tableExpenses = [...baseExpenses].sort((a, b) => {
-    // 1. Sort by Shift Name first (Admin Mode Only)
     if (a.shiftName && b.shiftName && a.shiftName !== b.shiftName) {
        const shiftOrder = { 'صباحي': 1, 'مسائي': 2, 'ليلي': 3, 'إدارة': 4 };
        return (shiftOrder[a.shiftName] || 9) - (shiftOrder[b.shiftName] || 9);
     }
-    // 2. Within same shift, keep 'fixed-daily' at top
-    // 2. Within same shift, keep 'fixed-daily' at top
-    // 🛡️ Safety: Convert to String before checking startsWith to prevent crashes on numeric IDs
     const strA = String(a.id || '');
     const strB = String(b.id || '');
     
     if (strA === 'fixed-daily' || strA.startsWith('fixed-daily')) return -1;
     if (strB === 'fixed-daily' || strB.startsWith('fixed-daily')) return 1;
     return 0;
-    return 0;
   });
 
-  // Track shift changes to insert separators in Admin view
   let lastShift = null;
 
-  // Handle click on the Finalize button when already finished
   const handleFinalizeClick = () => {
     if (isAlreadyFinished) {
       showToast('تنبيه', 'لقد قمت بإنهاء الوردية بالفعل لهذه الدورة', 'warning');
@@ -104,7 +91,6 @@ export const LoggerPage = React.memo(({
   const dropdownRef = React.useRef(null);
   const customDetailRef = React.useRef(null);
 
-  // Close dropdown when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -119,7 +105,6 @@ export const LoggerPage = React.memo(({
     setNewExpense({ ...newExpense, item: cat });
     setShowDropdown(false);
     
-    // If 'Other' is selected, wait for render and focus detail input
     if (cat === 'أخرى') {
       setTimeout(() => {
         customDetailRef.current?.focus();
@@ -129,7 +114,6 @@ export const LoggerPage = React.memo(({
     }
   };
 
-  // ⌨️ Keyboard Shortcut: Escape to cancel edit
   React.useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape' && editingId) {
@@ -156,15 +140,13 @@ export const LoggerPage = React.memo(({
           value={card1Value} 
           color="emerald"
           onChange={(val) => {
-            // 🛡️ Fix: Ensure mathematical addition by wrapping in Number()
-            // Prevents "10" + 50 = "1050" (String Concatenation Bug)
             const enteredCash = Number(toPosNum(val)) || 0;
             updateData({...currentEntry, sales: enteredCash + totalExp});
           }}
           inputRef={salesInputRef}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              e.preventDefault(); // Prevents default behavior but doesn't move focus
+              e.preventDefault(); 
             }
           }}
           editable={!isLocked}
@@ -190,7 +172,6 @@ export const LoggerPage = React.memo(({
             </h3>
           </header>
           
-          {/* Admin Date Selection (Months or Days) */}
           {isSuper && (
             <div className="flex justify-center mb-6 w-full max-w-4xl mx-auto">
                <div className="expense-input-row !p-2 !gap-4 flex items-center w-full">
@@ -199,7 +180,6 @@ export const LoggerPage = React.memo(({
                  </div>
                  
                  {isMonthlyMode ? (
-                   // Month Picker
                    <input 
                      type="month"
                      value={viewMonth || ''}
@@ -207,21 +187,40 @@ export const LoggerPage = React.memo(({
                      className="expense-input !flex-[1.5] text-center font-black text-2xl h-full cursor-pointer hover:bg-white transition-colors"
                    />
                  ) : (
-                   // Daily Dropdown Picker from Available Dates
-                   <select 
-                     value={currentEntry.date} 
-                     onChange={(e) => onDateChange && onDateChange(e.target.value)}
-                     className="expense-input !flex-[1.5] text-center font-black text-2xl h-full cursor-pointer hover:bg-white transition-colors appearance-none"
-                     style={{ textAlignLast: 'center' }}
-                   >
-                      {availableDates && availableDates.map(date => (
-                        <option key={date} value={date}>
-                           {date} {date === new Date().toISOString().split('T')[0] ? '(النهاردة)' : ''}
-                        </option>
-                      ))}
-                      {/* Safety fallback if availableDates is empty */}
-                      {(!availableDates || availableDates.length === 0) && <option value={currentEntry.date}>{currentEntry.date}</option>}
-                   </select>
+                    <select 
+                      value={currentEntry.date} 
+                      onChange={(e) => onDateChange && onDateChange(e.target.value)}
+                      className="expense-input !flex-[1.5] text-center font-black text-2xl h-full cursor-pointer hover:bg-white transition-colors appearance-none"
+                      style={{ textAlignLast: 'center' }}
+                    >
+                       {(() => {
+                          const d = new Date(currentEntry.date);
+                          let year = d.getFullYear();
+                          let month = d.getMonth() + 1;
+                          if (d.getDate() < 6) {
+                            month -= 1;
+                            if (month === 0) { month = 12; year -= 1; }
+                          }
+                          
+                          const fiscalDates = [];
+                          const start = new Date(year, month - 1, 6, 12);
+                          const end = new Date(year, month, 5, 12);
+                          const curr = new Date(start);
+                          while (curr <= end) {
+                            fiscalDates.push(curr.toISOString().split('T')[0]);
+                            curr.setDate(curr.getDate() + 1);
+                          }
+
+                          const allDates = Array.from(new Set([...fiscalDates, ...(availableDates || [])]))
+                            .sort((a, b) => b.localeCompare(a));
+
+                          return allDates.map(date => (
+                            <option key={date} value={date}>
+                               {date} {date === new Date().toISOString().split('T')[0] ? '(النهاردة)' : ''}
+                            </option>
+                          ));
+                       })()}
+                    </select>
                  )}
                </div>
             </div>
@@ -229,7 +228,6 @@ export const LoggerPage = React.memo(({
           
           {!isLocked ? (
             <div className="expense-input-row !p-6 !gap-6" style={{ position: 'relative', zIndex: 50 }} key={editingId ? 'editing' : 'adding'}>
-              {/* Statement / Category Selection Container */}
               <motion.div 
                 layout
                 transition={{ 
@@ -300,7 +298,6 @@ export const LoggerPage = React.memo(({
                 </AnimatePresence>
               </motion.div>
 
-              {/* Custom Detail Input for 'أخرى' */}
               {newExpense.item === 'أخرى' && (
                 <motion.input 
                   initial={{ width: 0, opacity: 0, scale: 0.8 }}
@@ -322,7 +319,6 @@ export const LoggerPage = React.memo(({
                 />
               )}
 
-              {/* Amount Input */}
               <motion.input 
                 layout
                 transition={{ 
@@ -342,7 +338,6 @@ export const LoggerPage = React.memo(({
                 className={`expense-input text-center ${editingId ? 'bg-amber-50/50 border-amber-100 placeholder-amber-400' : ''}`} 
               />
 
-              {/* Cancel Button - Sync'ed Animation */}
               <AnimatePresence>
                 {editingId && (
                   <motion.button
@@ -366,7 +361,6 @@ export const LoggerPage = React.memo(({
                 )}
               </AnimatePresence>
 
-              {/* Primary Action Button */}
               <motion.button 
                 layout
                 transition={{ 
@@ -381,9 +375,7 @@ export const LoggerPage = React.memo(({
               </motion.button>
             </div>
           ) : (
-            <div className="p-4 bg-slate-50/50 text-slate-400 text-center font-bold rounded-2xl">
-               {/* {isAlreadyFinished ? 'هذه الوردية مغلقة - وضع العرض فقط' : 'وضع السوبر أدمن مخصص للمراجعة والتقارير'} */}
-            </div>
+            <div className="p-4 bg-slate-50/50"></div>
           )}
 
           <div className="expense-table-container">
@@ -412,16 +404,13 @@ export const LoggerPage = React.memo(({
                       <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
                         <td className="text-lg font-bold text-center ltr">{day.date}</td>
                         <td className="text-center">
-                          <span className="text-xl font-bold text-emerald-700 monospaced-numbers">{formatAmount(day.sales)}</span>
-                          <span className="currency-tag">ج.م</span>
+                          <span className="text-xl font-bold text-emerald-700">{formatAmount(day.sales)} ج.م</span>
                         </td>
                         <td className="text-center">
-                          <span className="text-xl font-bold text-red-700 monospaced-numbers">{formatAmount(day.expenses)}</span>
-                          <span className="currency-tag">ج.م</span>
+                          <span className="text-xl font-bold text-red-700">{formatAmount(day.expenses)} ج.م</span>
                         </td>
                         <td className="text-center">
-                          <span className="text-xl font-black text-slate-800 monospaced-numbers">{formatAmount(day.net)}</span>
-                          <span className="currency-tag">ج.م</span>
+                          <span className="text-xl font-black text-slate-800">{formatAmount(day.net)} ج.م</span>
                         </td>
                       </tr>
                     ))
@@ -460,8 +449,7 @@ export const LoggerPage = React.memo(({
                               </td>
                             )}
                             <td className="text-center">
-                              <span className="text-2xl font-black text-amber-700 monospaced-numbers">{formatAmount(exp.amount) || 0}</span>
-                              <span className="currency-tag">ج.م</span>
+                              <span className="text-2xl font-black text-amber-700">{formatAmount(exp.amount) || 0} ج.م</span>
                             </td>
                             <td className="text-center">
                               {!isLocked && exp.id !== 'fixed-daily' && (
@@ -477,7 +465,6 @@ export const LoggerPage = React.memo(({
                   )
                 )}
                 
-                {/* Filler Rows */}
                 {!isMonthlyMode && Array.from({ length: Math.max(0, 5 - tableExpenses.length) }).map((_, i) => (
                   <tr key={`filler-${i}`} className="opacity-20 pointer-events-none">
                     <td className="text-transparent">—</td>
@@ -491,8 +478,6 @@ export const LoggerPage = React.memo(({
           </div>
         </div>
       </section>
-
-
 
       {isSuper ? (
         <section className="w-full max-w-4xl mb-32">
@@ -532,4 +517,3 @@ export const LoggerPage = React.memo(({
     </motion.div>
   );
 });
-
