@@ -420,6 +420,7 @@ function App() {
           } catch(e) {}
         }
       });
+      // Corrected: using the centralized showToast to ensure auto-removal
       showToast('تزامن السحابة', 'تمت مزامنة البيانات المحلية مع السيرفر بنجاح', 'success');
     }
 
