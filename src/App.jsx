@@ -207,39 +207,36 @@ function App() {
 
   // 🔄 ⚡️ PRO REAL-TIME SYNC: Listen for live changes from other devices
   useEffect(() => {
-    if (IS_DEMO_MODE) return;
+    if (IS_DEMO_MODE || !isDataLoaded) return;
 
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 't1t_system_data' },
+        { event: '*', schema: 'public', table: 't1t_system_data' },
         (payload) => {
           const { key, value } = payload.new;
-          // Update the corresponding state based on the key
-          if (key === 't1t_records') setEntries(value);
-          else if (key === 't1t_daily_reports') setDailyReports(value);
-          else if (key === 't1t_monthly_reports') setMonthlyReports(value);
-          else if (key === 't1t_orders') setOrders(value);
-          else if (key === 't1t_debtors') setDebtors(value);
-          else if (key === 't1t_currentEntry') setCurrentEntry(value);
-          else if (key === 't1t_system_users') setSystemUsers(value);
-          else if (key === 't1t_expense_categories') setExpenseCategories(value);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 't1t_system_data' },
-        (payload) => {
-          const { key, value } = payload.new;
-          if (key === 't1t_records') setEntries(value);
-          else if (key === 't1t_daily_reports') setDailyReports(value);
-          else if (key === 't1t_monthly_reports') setMonthlyReports(value);
-          else if (key === 't1t_orders') setOrders(value);
-          else if (key === 't1t_debtors') setDebtors(value);
-          else if (key === 't1t_currentEntry') setCurrentEntry(value);
-          else if (key === 't1t_system_users') setSystemUsers(value);
-          else if (key === 't1t_expense_categories') setExpenseCategories(value);
+          
+          // 🛡️ Flicker Guard: Only update if the cloud value is truly different from local
+          // This prevents current inputs from being wiped during sync
+          const updateIfChanged = (keyName, currentVal, setter) => {
+            if (key === keyName) {
+              const cloudStr = JSON.stringify(value);
+              const localStr = JSON.stringify(currentVal);
+              if (cloudStr !== localStr) {
+                setter(value);
+              }
+            }
+          };
+
+          updateIfChanged('t1t_records', entries, setEntries);
+          updateIfChanged('t1t_daily_reports', dailyReports, setDailyReports);
+          updateIfChanged('t1t_monthly_reports', monthlyReports, setMonthlyReports);
+          updateIfChanged('t1t_orders', orders, setOrders);
+          updateIfChanged('t1t_debtors', debtors, setDebtors);
+          updateIfChanged('t1t_currentEntry', currentEntry, setCurrentEntry);
+          updateIfChanged('t1t_system_users', systemUsers, setSystemUsers);
+          updateIfChanged('t1t_expense_categories', expenseCategories, setExpenseCategories);
         }
       )
       .subscribe();
@@ -247,7 +244,7 @@ function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isDataLoaded]);
+  }, [isDataLoaded, entries, dailyReports, monthlyReports, orders, debtors, currentEntry, systemUsers, expenseCategories]);
   
   // ⚡️ Pro Auto-Sync: Ensures archived Monthly Reports match Daily Reports truth (Cascading Update)
   useEffect(() => {
