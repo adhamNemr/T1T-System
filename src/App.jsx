@@ -275,19 +275,25 @@ function App() {
   }, [dailyReports, isDataLoaded, currentUser]);
 
 
-  // 💾 Auto-Sync Save Effects
+  // 💾 Auto-Sync Save Effects (Debounced for Cloud)
+  const syncTimeoutRef = useRef({});
+
   const saveToDB = async (key, val) => {
-    // 1. Local Save (Always fast)
+    // 1. Local Save (Always fast & immediate)
     if (window.db) window.db.set(key, val);
     else localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
 
-    // 2. Cloud Save (Background) - DISABLED IN DEMO MODE
+    // 2. Cloud Save (Debounced to prevent typing issues)
     if (IS_DEMO_MODE) return;
 
-    try {
-      const { error } = await supabase.from('t1t_system_data').upsert({ key, value: val }, { onConflict: 'key' });
-      if (error) console.error(`Sync Error for ${key}:`, error.message);
-    } catch (e) {}
+    if (syncTimeoutRef.current[key]) clearTimeout(syncTimeoutRef.current[key]);
+
+    syncTimeoutRef.current[key] = setTimeout(async () => {
+      try {
+        const { error } = await supabase.from('t1t_system_data').upsert({ key, value: val }, { onConflict: 'key' });
+        if (error) console.error(`Sync Error for ${key}:`, error.message);
+      } catch (e) {}
+    }, 1500); // Wait 1.5s after last change before hitting the cloud
   };
 
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_activeTab', activeTab); }, [activeTab, isDataLoaded]);
