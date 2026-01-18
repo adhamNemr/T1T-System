@@ -88,7 +88,7 @@ function App() {
     const d = new Date();
     let year = d.getFullYear();
     let month = d.getMonth() + 1;
-    // If today is before the 6th, we are still in the previous month's cycle
+    // 🛡️ Fiscal Logic: If today is before the 6th, we are financially in the PREVIOUS month
     if (d.getDate() < 6) {
       month -= 1;
       if (month === 0) {
