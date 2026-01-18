@@ -288,7 +288,8 @@ function App() {
     if (IS_DEMO_MODE) return;
 
     try {
-      await supabase.from('t1t_system_data').upsert({ key, value: val }, { onConflict: 'key' });
+      const { error } = await supabase.from('t1t_system_data').upsert({ key, value: val }, { onConflict: 'key' });
+      if (error) console.error(`Sync Error for ${key}:`, error.message);
     } catch (e) {}
   };
 
