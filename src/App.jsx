@@ -300,42 +300,12 @@ function App() {
     migratePasswords();
   }, [isDataLoaded]);
 
-  // 🚀 DEMO MODE SEEDER (Brings life to the demo)
+  // 🚀 DEMO MODE SEEDER (DISABLED FOR PRODUCTION)
   useEffect(() => {
+    // Seeder disabled to ensure system starts clean on white page as requested.
+    // If you ever need demo data again, you can re-enable this logic for testing.
     if (isDataLoaded && IS_DEMO_MODE && entries.length === 0) {
-      const today = new Date();
-      const mockEntries = [];
-      const mockReports = [];
-      
-      // Generate last 7 days of realistic activity
-      for (let i = 7; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(today.getDate() - i);
-        const dStr = d.toISOString().split('T')[0];
-        
-        mockEntries.push({
-          id: Date.now() + i,
-          date: dStr,
-          shift: 'مسائي',
-          user: 'admin',
-          sales: 2500 + (i * 100),
-          expenses: [{ id: 'fixed-daily', item: 'اليوميات', amount: 150 }],
-          isDailyFinalized: true
-        });
-        
-        mockReports.push({
-          date: dStr,
-          sales: 2500 + (i * 100),
-          expenses: 150,
-          net: 2350 + (i * 100),
-          shiftCount: 1,
-          finalizedBy: 'System'
-        });
-      }
-      
-      setEntries(mockEntries);
-      setDailyReports(mockReports);
-      showToast('عرض تجريبي', 'تم تحميل بيانات توضيحية لغرض التجربة فقط.', 'info');
+       console.log('Demo mode active, but auto-seeding is disabled for safety.');
     }
   }, [isDataLoaded]);
 
