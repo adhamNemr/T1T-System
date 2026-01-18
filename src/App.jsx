@@ -405,6 +405,24 @@ function App() {
     setIsLoggedIn(true);
     setLoginPassword(''); // Clear password after login
 
+    // ☁️ IMPORTANT: On first login in PRO mode, force a sync of local data to cloud
+    if (!IS_DEMO_MODE) {
+      const keys = [
+        't1t_records', 't1t_daily_reports', 't1t_monthly_reports', 
+        't1t_orders', 't1t_debtors', 't1t_system_users'
+      ];
+      keys.forEach(key => {
+        const val = localStorage.getItem(key);
+        if (val) {
+          try {
+            const parsed = key === 't1t_activeTab' ? val : JSON.parse(val);
+            supabase.from('t1t_system_data').upsert({ key, value: parsed }, { onConflict: 'key' }).then(() => {});
+          } catch(e) {}
+        }
+      });
+      showToast('تزامن السحابة', 'تمت مزامنة البيانات المحلية مع السيرفر بنجاح', 'success');
+    }
+
     // 🛡️ Super Admin Default View: Merge all of today's shifts immediately upon login
     if (user.role === 'super') {
       const dayEntries = entries.filter(e => e.date === today);
