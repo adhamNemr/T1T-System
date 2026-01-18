@@ -411,17 +411,21 @@ function App() {
         't1t_records', 't1t_daily_reports', 't1t_monthly_reports', 
         't1t_orders', 't1t_debtors', 't1t_system_users'
       ];
+      let hasSynced = false;
       keys.forEach(key => {
         const val = localStorage.getItem(key);
         if (val) {
           try {
             const parsed = key === 't1t_activeTab' ? val : JSON.parse(val);
-            supabase.from('t1t_system_data').upsert({ key, value: parsed }, { onConflict: 'key' }).then(() => {});
+            supabase.from('t1t_system_data').upsert({ key, value: parsed }, { onConflict: 'key' }).then(() => {
+               if (!hasSynced) {
+                 showToast('تزامن السحابة', 'تمت مزامنة البيانات مع السيرفر', 'success');
+                 hasSynced = true;
+               }
+            });
           } catch(e) {}
         }
       });
-      // Corrected: using the centralized showToast to ensure auto-removal
-      showToast('تزامن السحابة', 'تمت مزامنة البيانات المحلية مع السيرفر بنجاح', 'success');
     }
 
     // 🛡️ Super Admin Default View: Merge all of today's shifts immediately upon login
