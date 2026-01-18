@@ -140,56 +140,47 @@ function App() {
                 else if (item.key === 't1t_activeTab') val = legacy;
                 else val = JSON.parse(legacy);
               } catch (e) { val = item.def; }
-            } else {
+            } else { val = item.def; }
+            if (item.key === 't1t_system_users' && (!val || val.length === 0)) val = SYSTEM_USERS_SEED;
+            if (item.key === 't1t_expense_categories') val = DEFAULT_CATEGORIES;
+            item.set(val);
+          }
+        } else {
+          // 💻 Desktop Electron Mode (Secure)
+          for (const item of keys) {
+            let val = await window.db.get(item.key);
+            if (item.skipLoad) {
               val = item.def;
+            } else if (val === undefined || val === null) {
+              const legacy = localStorage.getItem(item.key);
+              if (legacy) {
+                try {
+                  if (item.key === 't1t_isLoggedIn') val = legacy === 'true';
+                  else if (item.key === 't1t_activeTab') val = legacy;
+                  else val = JSON.parse(legacy);
+                  await window.db.set(item.key, val); 
+                } catch (e) { val = item.def; }
+              } else {
+                val = item.def;
+                await window.db.set(item.key, val);
+              }
             }
-
-            // Safety Hack: Never allow empty users list & Sync Categories with code
             if (item.key === 't1t_system_users' && (!val || val.length === 0)) {
-               val = SYSTEM_USERS_SEED;
+              val = SYSTEM_USERS_SEED;
+              await window.db.set(item.key, val);
             }
             if (item.key === 't1t_expense_categories') {
               val = DEFAULT_CATEGORIES;
+              await window.db.set(item.key, val);
             }
             item.set(val);
           }
-          return;
         }
 
-        // 💻 Desktop Electron Mode (Secure)
-        for (const item of keys) {
-          let val = await window.db.get(item.key);
-          if (item.skipLoad) {
-            val = item.def;
-          } else if (val === undefined || val === null) {
-            const legacy = localStorage.getItem(item.key);
-            if (legacy) {
-              try {
-                if (item.key === 't1t_isLoggedIn') val = legacy === 'true';
-                else if (item.key === 't1t_activeTab') val = legacy;
-                else val = JSON.parse(legacy);
-                await window.db.set(item.key, val); 
-              } catch (e) { val = item.def; }
-            } else {
-              val = item.def;
-             await window.db.set(item.key, val);
-            }
-          }
-
-          // Safety Hack: Never allow empty users list & Sync Categories with code
-      if (item.key === 't1t_system_users' && (!val || val.length === 0)) {
-        val = SYSTEM_USERS_SEED;
-        if (window.db) await window.db.set(item.key, val);
-      }
-      if (item.key === 't1t_expense_categories') {
-        val = DEFAULT_CATEGORIES;
-        if (window.db) await window.db.set(item.key, val);
-      }
-      item.set(val);
-        }
-        // ☁️ Sync with Supabase Cloud (Non-blocking) - DISABLED IN DEMO MODE
+        // ☁️ Sync with Supabase Cloud (Critical Load) - ONLY IN PRO MODE
         if (!IS_DEMO_MODE) {
-          supabase.from('t1t_system_data').select('*').then(({ data: cloudData, error }) => {
+          try {
+            const { data: cloudData, error } = await supabase.from('t1t_system_data').select('*');
             if (!error && cloudData) {
               cloudData.forEach(row => {
                 const item = keys.find(k => k.key === row.key);
@@ -201,7 +192,7 @@ function App() {
                 }
               });
             }
-          }).catch(() => {});
+          } catch (e) { console.error('Cloud Sync Error:', e); }
         }
 
       } catch (err) {
