@@ -185,7 +185,15 @@ function App() {
               cloudData.forEach(row => {
                 const item = keys.find(k => k.key === row.key);
                 if (item) {
-                  const cloudVal = item.skipLoad ? item.def : row.value;
+                  let cloudVal = row.value;
+                  // 🛡️ Fallback for nulls
+                  if (cloudVal === null || cloudVal === undefined) {
+                    if (row.key === 't1t_currentEntry') cloudVal = INITIAL_ENTRY;
+                    else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(row.key)) cloudVal = [];
+                    else cloudVal = item.def;
+                  }
+                  if (item.skipLoad) cloudVal = item.def;
+
                   item.set(cloudVal);
                   if (window.db) window.db.set(item.key, cloudVal);
                   else localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
@@ -217,14 +225,21 @@ function App() {
         (payload) => {
           const { key, value } = payload.new;
           
-          // 🛡️ Flicker Guard: Only update if the cloud value is truly different from local
-          // This prevents current inputs from being wiped during sync
+          // 🛡️ Null Safety & Flicker Guard
           const updateIfChanged = (keyName, currentVal, setter) => {
             if (key === keyName) {
-              const cloudStr = JSON.stringify(value);
+              // Ensure we don't set important states to null accidentally after reset
+              let safeValue = value;
+              if (value === null || value === undefined) {
+                if (keyName === 't1t_currentEntry') safeValue = INITIAL_ENTRY;
+                else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(keyName)) safeValue = [];
+                else return; // Don't update if we don't have a safe fallback
+              }
+
+              const cloudStr = JSON.stringify(safeValue);
               const localStr = JSON.stringify(currentVal);
               if (cloudStr !== localStr) {
-                setter(value);
+                setter(safeValue);
               }
             }
           };
