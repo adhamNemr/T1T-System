@@ -196,6 +196,10 @@ function App() {
             cloudData.forEach(row => {
               const item = keys.find(k => k.key === row.key);
               if (item) {
+                // 🛡️ CRITICAL SECURITY: Never load login/session state from the cloud
+                const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
+                if (isSessionKey) return; 
+
                 let cloudVal = row.value;
                 // 🛡️ Fallback for nulls
                 if (cloudVal === null || cloudVal === undefined) {
@@ -207,16 +211,9 @@ function App() {
 
                 item.set(cloudVal);
                 
-                // 🛡️ Migration: If we just loaded a session key from localStorage, move it to sessionStorage and kill it locally
-                const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
-                if (isSessionKey && !window.db) {
-                   sessionStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
-                   localStorage.removeItem(item.key);
-                }
-
                 if (window.db) window.db.set(item.key, cloudVal);
                 else {
-                  if (!isSessionKey) localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
+                  localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
                 }
               }
             });
