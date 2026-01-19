@@ -39,7 +39,7 @@ const DEFAULT_CATEGORIES = [
 
 // 🛡️ Pre-Hashed Security Seed (Passwords are NOT visible in plain text anymore)
 const SYSTEM_USERS_SEED = [
-  { username: 'admin', password: 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', shift: 'إدارة', role: 'super' }, // '123'
+  { username: 'admin', password: '2551dabd83d93de39f2368b346651aa66e73a7cef7a4feb8583131dab42fee6f', shift: 'إدارة', role: 'super' }, // '2026'
   { username: 'medhat', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'صباحي', role: 'user' }, // '1234'
   { username: 'abdo', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'مسائي', role: 'user' }, // '1234'
   { username: 'adham', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'ليلي', role: 'user' }   // '1234'
@@ -360,32 +360,7 @@ function App() {
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_system_users', systemUsers); }, [systemUsers, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_expense_categories', expenseCategories); }, [expenseCategories, isDataLoaded]);
 
-  // 🛡️ Security Migration: Hash plain-text passwords on load
-  useEffect(() => {
-    const migratePasswords = async () => {
-      if (!isDataLoaded || systemUsers.length === 0) return;
-      
-      const MIGRATION_KEY = 't1t_v2_salted'; // Flag to ensure we only migrate once to salted
-      if (localStorage.getItem(MIGRATION_KEY)) return;
-
-      let changed = false;
-      const updatedUsers = await Promise.all(systemUsers.map(async (u) => {
-        // We force re-hashing everything once to the new PEPPER format
-        // We use a dummy check or just re-hash the seed passwords if they look like old hashes
-        const hashed = await hashPassword(u.password.length === 64 ? '123' : u.password); 
-        // Note: For existing users, if they are locked out, we might need to reset to '123' or their known plain password
-        // Since this is local, I will reset 'admin' to '123' (hashed) to ensure you can get in.
-        if (u.username === 'admin') {
-           return { ...u, password: await hashPassword('123') };
-        }
-        return { ...u, password: hashed };
-      }));
-
-      setSystemUsers(updatedUsers);
-      localStorage.setItem(MIGRATION_KEY, 'true');
-    };
-    migratePasswords();
-  }, [isDataLoaded]);
+  // 🛡️ Security Migration: Removed legacy plain-text migration to prevent overwrites
 
   // 🚀 DEMO MODE SEEDER (DISABLED FOR PRODUCTION)
   useEffect(() => {
