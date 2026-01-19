@@ -528,6 +528,38 @@ function App() {
     }
   }, [isLoggedIn]);
 
+  // 🛡️ Auto-Logout on Inactivity (30 Minutes)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let idleTimer;
+    const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 Minutes
+
+    const resetTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        handleLogout();
+        showToast('انتهت الجلسة', 'تم تسجيل الخروج تلقائياً بسبب الخمول لفترة طويلة', 'info');
+      }, INACTIVITY_LIMIT);
+    };
+
+    // Events to track activity
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+    
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    resetTimer(); // Start timer on mount
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [isLoggedIn]);
+
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
