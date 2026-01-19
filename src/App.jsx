@@ -132,9 +132,15 @@ function App() {
         if (!window.db) {
           // 🌐 Browser Fallback (Dev Mode)
           for (const item of keys) {
-            // 🛡️ Session-based Login: Use sessionStorage for login status, localStorage for data
-            const storage = (item.key === 't1t_isLoggedIn' || item.key === 't1t_currentUser') ? sessionStorage : localStorage;
-            let legacy = storage.getItem(item.key);
+            // 🛡️ Session Keys: These should vanish when browser closes
+            const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
+            let legacy = isSessionKey ? sessionStorage.getItem(item.key) : localStorage.getItem(item.key);
+            
+            // Fallback to localStorage once for migration or if sessionStorage is empty
+            if (isSessionKey && legacy === null) {
+              legacy = localStorage.getItem(item.key);
+            }
+
             let val;
             if (legacy && !item.skipLoad) {
               try {
@@ -300,12 +306,13 @@ function App() {
     if (window.db) {
       window.db.set(key, val);
     } else {
-      // 🛡️ Session-based Login: Save login status to sessionStorage, everything else to localStorage
-      if (key === 't1t_isLoggedIn' || key === 't1t_currentUser') {
-        sessionStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
-      } else {
-        localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
-      }
+      // 🛡️ Session Keys: isLoggedIn, currentUser, activeTab (only persist per session)
+      const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(key);
+      const storage = isSessionKey ? sessionStorage : localStorage;
+      storage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+      
+      // Cleanup localStorage for session keys to ensure request is honored after refresh
+      if (isSessionKey) localStorage.removeItem(key);
     }
 
     // 2. Cloud Save (Debounced to prevent typing issues)
@@ -516,10 +523,15 @@ function App() {
     setCurrentUser(null);
     setLoginUser('');
     setLoginPassword('');
+    // Clear both to be ultra safe
     localStorage.removeItem('t1t_isLoggedIn');
     localStorage.removeItem('t1t_currentUser');
     localStorage.removeItem('t1t_currentEntry');
-    localStorage.removeItem('t1t_activeTab'); // Clear tab persistence
+    localStorage.removeItem('t1t_activeTab');
+    sessionStorage.removeItem('t1t_isLoggedIn');
+    sessionStorage.removeItem('t1t_currentUser');
+    sessionStorage.removeItem('t1t_activeTab');
+
     setActiveTab('logger'); // Reset to default tab
     setCurrentEntry({
       ...INITIAL_ENTRY,
