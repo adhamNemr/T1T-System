@@ -190,23 +190,33 @@ function App() {
           try {
             const { data: cloudData, error } = await supabase.from('t1t_system_data').select('*');
             if (!error && cloudData) {
-              cloudData.forEach(row => {
-                const item = keys.find(k => k.key === row.key);
-                if (item) {
-                  let cloudVal = row.value;
-                  // 🛡️ Fallback for nulls
-                  if (cloudVal === null || cloudVal === undefined) {
-                    if (row.key === 't1t_currentEntry') cloudVal = INITIAL_ENTRY;
-                    else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(row.key)) cloudVal = [];
-                    else cloudVal = item.def;
-                  }
-                  if (item.skipLoad) cloudVal = item.def;
-
-                  item.set(cloudVal);
-                  if (window.db) window.db.set(item.key, cloudVal);
-                  else localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
+            cloudData.forEach(row => {
+              const item = keys.find(k => k.key === row.key);
+              if (item) {
+                let cloudVal = row.value;
+                // 🛡️ Fallback for nulls
+                if (cloudVal === null || cloudVal === undefined) {
+                  if (row.key === 't1t_currentEntry') cloudVal = INITIAL_ENTRY;
+                  else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(row.key)) cloudVal = [];
+                  else cloudVal = item.def;
                 }
-              });
+                if (item.skipLoad) cloudVal = item.def;
+
+                item.set(cloudVal);
+                
+                // 🛡️ Migration: If we just loaded a session key from localStorage, move it to sessionStorage and kill it locally
+                const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
+                if (isSessionKey && !window.db) {
+                   sessionStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
+                   localStorage.removeItem(item.key);
+                }
+
+                if (window.db) window.db.set(item.key, cloudVal);
+                else {
+                  if (!isSessionKey) localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
+                }
+              }
+            });
             }
           } catch (e) { console.error('Cloud Sync Error:', e); }
         }
