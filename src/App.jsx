@@ -132,13 +132,16 @@ function App() {
         if (!window.db) {
           // 🌐 Browser Fallback (Dev Mode)
           for (const item of keys) {
-            // 🛡️ Session Keys: These should vanish when browser closes
+            // 🛡️ STRICT SESSION POLICY: Login keys MUST perish with the tab/window
             const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
-            let legacy = isSessionKey ? sessionStorage.getItem(item.key) : localStorage.getItem(item.key);
             
-            // Fallback to localStorage once for migration or if sessionStorage is empty
-            if (isSessionKey && legacy === null) {
-              legacy = localStorage.getItem(item.key);
+            let legacy;
+            if (isSessionKey) {
+                legacy = sessionStorage.getItem(item.key);
+                // 🧹 Security Purge: Ensure no session data lingers in permanent storage
+                localStorage.removeItem(item.key);
+            } else {
+                legacy = localStorage.getItem(item.key);
             }
 
             let val;
