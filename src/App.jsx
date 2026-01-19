@@ -270,6 +270,12 @@ function App() {
           updateIfChanged('t1t_currentEntry', currentEntry, setCurrentEntry);
           updateIfChanged('t1t_system_users', systemUsers, setSystemUsers);
           updateIfChanged('t1t_expense_categories', expenseCategories, setExpenseCategories);
+
+          // 🚨 GLOBAL KILL SWITCH: If this key changes, force all sessions to expire
+          if (key === 't1t_kill_switch') {
+             handleLogout();
+             showToast('تحديث أمني', 'تم إنهاء الجلسة لأسباب أمنية، يرجى الدخول مجدداً', 'warning');
+          }
         }
       )
       .subscribe();
