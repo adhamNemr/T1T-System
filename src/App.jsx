@@ -132,7 +132,9 @@ function App() {
         if (!window.db) {
           // 🌐 Browser Fallback (Dev Mode)
           for (const item of keys) {
-            let legacy = localStorage.getItem(item.key);
+            // 🛡️ Session-based Login: Use sessionStorage for login status, localStorage for data
+            const storage = (item.key === 't1t_isLoggedIn' || item.key === 't1t_currentUser') ? sessionStorage : localStorage;
+            let legacy = storage.getItem(item.key);
             let val;
             if (legacy && !item.skipLoad) {
               try {
@@ -295,8 +297,16 @@ function App() {
 
   const saveToDB = async (key, val) => {
     // 1. Local Save (Always fast & immediate)
-    if (window.db) window.db.set(key, val);
-    else localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+    if (window.db) {
+      window.db.set(key, val);
+    } else {
+      // 🛡️ Session-based Login: Save login status to sessionStorage, everything else to localStorage
+      if (key === 't1t_isLoggedIn' || key === 't1t_currentUser') {
+        sessionStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+      } else {
+        localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+      }
+    }
 
     // 2. Cloud Save (Debounced to prevent typing issues)
     if (IS_DEMO_MODE) return;
