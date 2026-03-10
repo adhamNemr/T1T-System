@@ -71,8 +71,12 @@ export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast
   };
 
   const currentMonthOrders = orders.filter(o => {
-    // If no finalize date exists, show everything
-    if (!lastFinalizedDate) return true;
+    // If no finalize date exists, we fallback to the dynamic fiscal month to handle the transition safely
+    // without requiring the user to prematurely finalize a month.
+    if (!lastFinalizedDate) {
+      if (!isInFiscalMonthHelper || !currentFiscalMonthStr) return true;
+      return isInFiscalMonthHelper(o.date, currentFiscalMonthStr);
+    }
     
     // Compare exact timestamps
     // Fallback to end-of-day of the order date if timestamp is missing from older records
