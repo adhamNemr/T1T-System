@@ -6,7 +6,7 @@ import { OrderTable } from '../components/orders/OrderTable';
 
 import { SummaryCard } from '../components/SummaryCard';
 
-export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast, lastFinalizedDate }) => {
+export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast, lastFinalizedDate, currentFiscalMonthStr, isInFiscalMonthHelper }) => {
   const [newOrder, setNewOrder] = useState({ 
     item: '', 
     price: '', 
