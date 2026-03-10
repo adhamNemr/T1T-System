@@ -52,32 +52,41 @@ export const LoggerPage = React.memo(({
   // 🧮 Logic Update: Total Sales = Cash In Hand + Total Expenses
   const currentExpenses = currentEntry.expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   
-  const totalExp = currentExpenses;
-  const totalSalesFromState = Number(currentEntry.sales) || 0;
+  const totalExp = isSuper ? todayTotalExp : currentExpenses;
+  const totalSalesFromState = isSuper ? todayTotalSales : (Number(currentEntry.sales) || 0);
   
-  const cashInHand = totalSalesFromState - totalExp;
+  // 🛡️ Admin Logic: For Super Admins, "Cash in Hand" should be the day's Net (Total Sales - Total Exp)
+  const cashInHand = isSuper ? (todayTotalSales - todayTotalExp) : (totalSalesFromState - totalExp);
 
-  const card1Title = isMonthlyMode ? "إجمالي مبيعات الشهر" : "المبلغ (الكاش)";
+  const card1Title = isMonthlyMode ? "إجمالي مبيعات الشهر" : isSuper ? "المبلغ (كاش اليوم)" : "المبلغ (الكاش)";
   const card1Value = isMonthlyMode ? totalSalesFromState : cashInHand;
   
-  const card3Title = isMonthlyMode ? "صافي الشهر" : "إجمالي المبيعات";
+  const card3Title = isMonthlyMode ? "صافي الشهر" : isSuper ? "إجمالي مبيعات اليوم" : "إجمالي المبيعات";
   const card3Value = isMonthlyMode ? (totalSalesFromState - totalExp) : totalSalesFromState;
 
-  const baseExpenses = isMonthlyMode ? todayAllExpenses : currentEntry.expenses;
+  const baseExpenses = (isMonthlyMode || isSuper) ? todayAllExpenses : currentEntry.expenses;
   const tableExpenses = [...baseExpenses].sort((a, b) => {
-    if (a.shiftName && b.shiftName && a.shiftName !== b.shiftName) {
-       const shiftOrder = { 'صباحي': 1, 'مسائي': 2, 'ليلي': 3, 'إدارة': 4 };
-       return (shiftOrder[a.shiftName] || 9) - (shiftOrder[b.shiftName] || 9);
-    }
+    const shiftOrder = { 'صباحي': 1, 'مسائي': 2, 'ليلي': 3, 'إدارة': 4 };
+    const sA = shiftOrder[String(a.shiftName || '').trim()] || 9;
+    const sB = shiftOrder[String(b.shiftName || '').trim()] || 9;
+
+    if (sA !== sB) return sA - sB;
+    
+    // Group by user name next
+    const uA = String(a.userName || '').trim();
+    const uB = String(b.userName || '').trim();
+    if (uA !== uB) return uA.localeCompare(uB);
+
+    // Put fixed-daily at top for each user
     const strA = String(a.id || '');
     const strB = String(b.id || '');
+    if (strA.startsWith('fixed-daily') && !strB.startsWith('fixed-daily')) return -1;
+    if (!strA.startsWith('fixed-daily') && strB.startsWith('fixed-daily')) return 1;
     
-    if (strA === 'fixed-daily' || strA.startsWith('fixed-daily')) return -1;
-    if (strB === 'fixed-daily' || strB.startsWith('fixed-daily')) return 1;
     return 0;
   });
 
-  let lastShift = null;
+  let lastHeaderKey = "";
 
   const handleFinalizeClick = () => {
     if (isAlreadyFinished) {
@@ -141,7 +150,18 @@ export const LoggerPage = React.memo(({
           color="emerald"
           onChange={(val) => {
             const enteredCash = Number(toPosNum(val)) || 0;
-            updateData({...currentEntry, sales: enteredCash + totalExp});
+            if (isSuper) {
+              // 🧮 Stable Admin Math:
+              // We need: (mySales + otherSales) - (myExp + otherExp) = enteredCash
+              // So: mySales = enteredCash + (myExp + otherExp) - otherSales
+              const otherShiftsSales = todayTotalSales - (Number(currentEntry.sales) || 0);
+              const totalTodayExpenses = todayTotalExp; // Already includes my expenses
+              const neededMySales = enteredCash + totalTodayExpenses - otherShiftsSales;
+              
+              updateData({...currentEntry, sales: neededMySales});
+            } else {
+              updateData({...currentEntry, sales: enteredCash + totalExp});
+            }
           }}
           inputRef={salesInputRef}
           onKeyDown={(e) => {
@@ -152,7 +172,7 @@ export const LoggerPage = React.memo(({
           editable={!isLocked}
         />
         <SummaryCard 
-          title={isMonthlyMode ? "إجمالي خوارج الشهر" : "إجمالي الخوارج"} 
+          title={isMonthlyMode ? "إجمالي خوارج الشهر" : isSuper ? "إجمالي خوارج اليوم" : "إجمالي الخوارج"} 
           value={totalExp} 
           color="amber" 
         />
@@ -226,6 +246,50 @@ export const LoggerPage = React.memo(({
             </div>
           )}
           
+          
+          {/* 🗓️ User Date Selection (Last 30 Days) - Only for Standard Users */}
+          {!isSuper && !isMonthlyMode && (
+             <div className="flex justify-center mb-6 w-full max-w-4xl mx-auto">
+               <div className="expense-input-row !p-2 !gap-4 flex items-center w-full">
+                 <div className="expense-input !flex-[0.5] !bg-[#064e3b] !text-white flex items-center justify-center !p-0 !border-none shadow-sm">
+                   <span className="font-bold text-lg">تاريخ السجل</span>
+                 </div>
+                 <select 
+                   value={currentEntry.date}
+                   onChange={(e) => onDateChange(e.target.value)}
+                   className="expense-input !flex-[1.5] text-center font-black text-2xl h-full cursor-pointer hover:bg-white transition-colors appearance-none" 
+                   style={{ textAlignLast: 'center' }}
+                 >
+                   {(() => {
+                      const d = new Date();
+                      let year = d.getFullYear();
+                      let month = d.getMonth() + 1;
+                      // Fiscal Month Logic: If today is before the 6th, we're in the previous month's cycle
+                      if (d.getDate() < 6) {
+                        month -= 1;
+                        if (month === 0) { month = 12; year -= 1; }
+                      }
+                      
+                      const fiscalDates = [];
+                      const start = new Date(year, month - 1, 6, 12);
+                      const end = new Date(year, month, 5, 12);
+                      const curr = new Date(start);
+                      
+                      while (curr <= end) {
+                        fiscalDates.push(curr.toISOString().split('T')[0]);
+                        curr.setDate(curr.getDate() + 1);
+                      }
+
+                      return fiscalDates.sort((a, b) => b.localeCompare(a)).map(date => {
+                        const isToday = date === new Date().toISOString().split('T')[0];
+                        return <option key={date} value={date}>{date} {isToday ? '(النهاردة)' : ''}</option>;
+                      });
+                   })()}
+                 </select>
+               </div>
+             </div>
+          )}
+
           {!isLocked ? (
             <div className="expense-input-row !p-6 !gap-6" style={{ position: 'relative', zIndex: 50 }} key={editingId ? 'editing' : 'adding'}>
               <motion.div 
@@ -422,29 +486,59 @@ export const LoggerPage = React.memo(({
                     </tr>
                   )
                 ) : (
-                  tableExpenses.length > 0 ? (
-                    tableExpenses.map((exp, idx) => {
-                      const showShiftHeader = isSuper && exp.shiftName && exp.shiftName !== lastShift;
-                      if (showShiftHeader) lastShift = exp.shiftName;
+                  (() => {
+                    const shiftGroups = {};
+                    tableExpenses.forEach(exp => {
+                      // 🛡️ Fallback Logic: If the individual item doesn't have metadata (new entry), use the main entry's data
+                      const sName = (exp.shiftName || currentEntry.shift || 'غير محدد').trim();
+                      if (!shiftGroups[sName]) shiftGroups[sName] = [];
+                      shiftGroups[sName].push({
+                        ...exp,
+                        shiftName: sName,
+                        userName: exp.userName || currentEntry.user || 'غير معروف'
+                      });
+                    });
 
-                      return (
-                        <React.Fragment key={exp.id || idx}>
-                          {showShiftHeader && (
-                            <tr className="bg-slate-50">
-                              <td colSpan={isSuper ? 4 : 3} className="py-2 px-6">
-                                <span className="text-xs font-black text-slate-400 tracking-widest uppercase">
-                                  وردية: {exp.shiftName} — {exp.userName}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
+                    const shiftOrder = ['صباحي', 'مسائي', 'ليلي', 'إدارة'];
+                    const sortedShifts = Object.keys(shiftGroups).sort((a,b) => {
+                       return (shiftOrder.indexOf(a) === -1 ? 9 : shiftOrder.indexOf(a)) - 
+                              (shiftOrder.indexOf(b) === -1 ? 9 : shiftOrder.indexOf(b));
+                    });
+
+                    if (sortedShifts.length === 0) {
+                      return Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={`filler-${i}`} className="opacity-20 pointer-events-none">
+                          <td className="text-transparent">—</td>
+                          {isSuper && <td className="text-transparent">—</td>}
+                          <td className="text-transparent">—</td>
+                          <td className="text-transparent">—</td>
+                        </tr>
+                      ));
+                    }
+
+                    return sortedShifts.map(sName => (
+                      <React.Fragment key={sName}>
+                        <tr className="bg-slate-100/10 border-b border-slate-200">
+                          <td colSpan={isSuper ? 4 : 3} className="py-2.5 px-6">
+                            <div className="flex items-center gap-2">
+                              <span className="w-1.5 h-4 bg-[#064e3b] rounded-full"></span>
+                              <span className="text-sm font-black text-[#064e3b] tracking-wider">
+                                وردية: {sName} — {shiftGroups[sName][0].userName}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {shiftGroups[sName].map((exp, idx) => (
                           <tr 
+                            key={exp.id || `exp-${sName}-${idx}`}
                             onClick={() => !isLocked && startEdit(exp)} 
                             className={`${!isLocked ? 'cursor-pointer' : ''} ${editingId === exp.id ? 'bg-amber-50/50' : ''} hover:bg-slate-50/30 transition-colors`}
                           >
-                            <td className="text-xl font-bold">{(String(exp.id || '') === 'fixed-daily' || String(exp.id || '').startsWith('fixed-daily')) ? 'يوميات' : exp.item}</td>
+                            <td className="text-xl font-bold">
+                              {(String(exp.id || '') === 'fixed-daily' || String(exp.id || '').startsWith('fixed-daily')) ? 'يوميات' : exp.item}
+                            </td>
                             {isSuper && (
-                              <td className="text-sm text-amber-600 font-bold">
+                              <td className="text-sm text-slate-500 font-medium">
                                 {exp.shiftName}
                               </td>
                             )}
@@ -452,21 +546,20 @@ export const LoggerPage = React.memo(({
                               <span className="text-2xl font-black text-amber-700">{formatAmount(exp.amount) || 0} ج.م</span>
                             </td>
                             <td className="text-center">
-                              {!isLocked && exp.id !== 'fixed-daily' && (
+                              {!isLocked && String(exp.id || '').indexOf('fixed-daily') === -1 && (
                                 <button onClick={(e) => removeExpense(e, exp.id)} className="delete-text-btn">حذف</button>
                               )}
                             </td>
                           </tr>
-                        </React.Fragment>
-                      );
-                    })
-                  ) : (
-                    <tr className="opacity-0 h-4"><td></td></tr>
-                  )
+                        ))}
+                      </React.Fragment>
+                    ));
+                  })()
                 )}
                 
-                {!isMonthlyMode && Array.from({ length: Math.max(0, 5 - tableExpenses.length) }).map((_, i) => (
-                  <tr key={`filler-${i}`} className="opacity-20 pointer-events-none">
+                {/* Filler rows only if total items are very few across ALL shifts */}
+                {!isMonthlyMode && tableExpenses.length < 3 && Array.from({ length: 3 - tableExpenses.length }).map((_, i) => (
+                  <tr key={`filler-total-${i}`} className="opacity-10 pointer-events-none">
                     <td className="text-transparent">—</td>
                     {isSuper && <td className="text-transparent">—</td>}
                     <td className="text-transparent">—</td>

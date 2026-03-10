@@ -6,7 +6,7 @@ import { OrderTable } from '../components/orders/OrderTable';
 
 import { SummaryCard } from '../components/SummaryCard';
 
-export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast }) => {
+export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast, lastFinalizedDate }) => {
   const [newOrder, setNewOrder] = useState({ 
     item: '', 
     price: '', 
@@ -70,8 +70,20 @@ export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast
     );
   };
 
-  const totalOrdersValue = orders.reduce((sum, o) => sum + Number(o.price), 0);
-  const totalPaid = orders.reduce((sum, o) => sum + Number(o.paidAmount), 0);
+  const currentMonthOrders = orders.filter(o => {
+    // If no finalize date exists, show everything
+    if (!lastFinalizedDate) return true;
+    
+    // Compare exact timestamps
+    // Fallback to end-of-day of the order date if timestamp is missing from older records
+    const orderTime = o.timestamp ? new Date(o.timestamp).getTime() : new Date(`${o.date}T23:59:59Z`).getTime();
+    const finalTime = new Date(lastFinalizedDate).getTime();
+    
+    return orderTime > finalTime;
+  });
+
+  const totalOrdersValue = currentMonthOrders.reduce((sum, o) => sum + Number(o.price), 0);
+  const totalPaid = currentMonthOrders.reduce((sum, o) => sum + Number(o.paidAmount), 0);
   const totalRemaining = totalOrdersValue - totalPaid;
 
   return (
@@ -120,7 +132,7 @@ export const OrdersPage = ({ orders, setOrders, userRole, showConfirm, showToast
             editingId={editingOrderId}
           />
           <OrderTable 
-            orders={orders} 
+            orders={currentMonthOrders} 
             onRemove={removeOrder} 
             onEdit={startEditOrder}
             editingId={editingOrderId}

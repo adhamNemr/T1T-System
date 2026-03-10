@@ -34,7 +34,20 @@ const INITIAL_ENTRY = {
 };
 
 const DEFAULT_CATEGORIES = [
-  'ليمون', 'لبن', 'نظافة', 'صيانة', 'كهرباء/مياه/غاز', 'عصير', 'نقل كراتين', 'يوميات', 'أخرى'
+  "ليمون",
+  "نعناع",
+  "معسلات",
+  "أخرى",
+  "لبن",
+  "نظافة",
+  "صيانة بار",
+  "صيانة شيشه",
+  "صيانة صاله",
+  "كهرباء/مياه/غاز",
+  "عصير",
+  "نقل كراتين",
+  "يوميات"
+
 ];
 
 // 🛡️ Pre-Hashed Security Seed (Passwords are NOT visible in plain text anymore)
@@ -42,7 +55,7 @@ const SYSTEM_USERS_SEED = [
   { username: 'admin', password: '2551dabd83d93de39f2368b346651aa66e73a7cef7a4feb8583131dab42fee6f', shift: 'إدارة', role: 'super' }, // '2026'
   { username: 'medhat', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'صباحي', role: 'user' }, // '1234'
   { username: 'abdo', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'مسائي', role: 'user' }, // '1234'
-  { username: 'adham', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'ليلي', role: 'user' }   // '1234'
+  { username: 'amer', password: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', shift: 'ليلي', role: 'user' }   // '1234'
 ];
 
 const IS_DEMO_MODE = typeof window !== 'undefined' && 
@@ -59,8 +72,20 @@ function App() {
   const [orders, setOrders] = useState([]);
   const [debtors, setDebtors] = useState([]);
   const [currentEntry, setCurrentEntry] = useState(INITIAL_ENTRY);
+  // 🆕 Live Drafts from other shifts (for Admin/Shared View)
+  const [liveDrafts, setLiveDrafts] = useState({}); 
+
   const [systemUsers, setSystemUsers] = useState([]); 
   const [expenseCategories, setExpenseCategories] = useState(DEFAULT_CATEGORIES);
+  const [lastFinalizedDate, setLastFinalizedDate] = useState(null);
+
+  // 🔑 Shift Key Mapping for Separate Drafts
+  // 🔑 Shift + Date Key Mapping for Separate Drafts
+  const getDraftKey = (shiftName, date) => {
+    const map = { 'صباحي': 'morning', 'مسائي': 'evening', 'ليلي': 'night', 'إدارة': 'admin' };
+    const dateStr = date || currentEntry.date || new Date().toISOString().split('T')[0];
+    return `t1t_draft_${dateStr}_${map[shiftName] || 'general'}`;
+  };
   
   // 🗓️ View State for Monthly Navigation
   // 🗓️ View State for Monthly Navigation (Fiscal Month starts on 6th)
@@ -121,12 +146,13 @@ function App() {
           { key: 't1t_monthly_reports', set: setMonthlyReports, def: [] },
           { key: 't1t_orders', set: setOrders, def: [] },
           { key: 't1t_debtors', set: setDebtors, def: [] },
-          { key: 't1t_currentEntry', set: setCurrentEntry, def: INITIAL_ENTRY },
+          // { key: 't1t_currentEntry', set: setCurrentEntry, def: INITIAL_ENTRY }, // 🚫 No longer loading global entry
           { key: 't1t_activeTab', set: setActiveTab, def: 'logger' },
           {key: 't1t_isLoggedIn', set: setIsLoggedIn, def: false },
           {key: 't1t_currentUser', set: setCurrentUser, def: null },
           { key: 't1t_system_users', set: setSystemUsers, def: SYSTEM_USERS_SEED },
-          { key: 't1t_expense_categories', set: setExpenseCategories, def: DEFAULT_CATEGORIES }
+          { key: 't1t_expense_categories', set: setExpenseCategories, def: DEFAULT_CATEGORIES },
+          { key: 't1t_last_finalized_date', set: setLastFinalizedDate, def: null }
         ];
 
         if (!window.db) {
@@ -153,7 +179,7 @@ function App() {
               } catch (e) { val = item.def; }
             } else { val = item.def; }
             if (item.key === 't1t_system_users' && (!val || val.length === 0)) val = SYSTEM_USERS_SEED;
-            if (item.key === 't1t_expense_categories') val = DEFAULT_CATEGORIES;
+            // Removed redundant hard-override for categories to allow smart-merging below
             item.set(val);
           }
         } else {
@@ -188,35 +214,79 @@ function App() {
           }
         }
 
-        // ☁️ Sync with Supabase Cloud (Critical Load) - ONLY IN PRO MODE
+        // ☁️ Sync with Supabase Cloud (Isolated Shift System)
         if (!IS_DEMO_MODE) {
           try {
             const { data: cloudData, error } = await supabase.from('t1t_system_data').select('*');
             if (!error && cloudData) {
-            cloudData.forEach(row => {
-              const item = keys.find(k => k.key === row.key);
-              if (item) {
-                // 🛡️ CRITICAL SECURITY: Never load login/session state from the cloud
-                const isSessionKey = ['t1t_isLoggedIn', 't1t_currentUser', 't1t_activeTab'].includes(item.key);
-                if (isSessionKey) return; 
-
-                let cloudVal = row.value;
-                // 🛡️ Fallback for nulls
-                if (cloudVal === null || cloudVal === undefined) {
-                  if (row.key === 't1t_currentEntry') cloudVal = INITIAL_ENTRY;
-                  else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(row.key)) cloudVal = [];
-                  else cloudVal = item.def;
-                }
-                if (item.skipLoad) cloudVal = item.def;
-
-                item.set(cloudVal);
+              cloudData.forEach(row => {
+                const item = keys.find(k => k.key === row.key);
                 
-                if (window.db) window.db.set(item.key, cloudVal);
-                else {
-                  localStorage.setItem(item.key, typeof cloudVal === 'string' ? cloudVal : JSON.stringify(cloudVal));
+                // 🛡️ SECURITY: Never load global session/entry state from cloud anymore
+                if (['t1t_currentEntry', 't1t_currentUser', 't1t_isLoggedIn'].includes(row.key)) return;
+
+                if (item) {
+                  let cloudVal = row.value;
+                  if (cloudVal === null || cloudVal === undefined) {
+                    if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(row.key)) cloudVal = [];
+                    else cloudVal = item.def;
+                  }
+
+                  if (item.key === 't1t_records') {
+                    // (Logic for Healing/Unmerging legacy data remains here)
+                    const rawEntries = Array.isArray(cloudVal) ? cloudVal : [];
+                    const healedMap = {}; 
+                    rawEntries.forEach(entry => {
+                      const date = entry.date;
+                      if (!date) return;
+                      const isMergedAdmin = entry.shift === 'إدارة' && entry.expenses?.some(ex => ex.shiftName && ex.shiftName !== 'إدارة');
+                      const key = `${date}-${entry.shift}`;
+                      if (!isMergedAdmin) healedMap[key] = entry;
+                    });
+                    rawEntries.forEach(entry => {
+                      if (entry.shift === 'إدارة' && entry.expenses?.some(ex => ex.shiftName && ex.shiftName !== 'إدارة')) {
+                          const expensesByShift = {};
+                          entry.expenses.forEach(ex => {
+                            const sName = (ex.shiftName || 'إدارة').trim();
+                            if (!expensesByShift[sName]) expensesByShift[sName] = [];
+                            expensesByShift[sName].push({ ...ex, id: ex.originalId || ex.id });
+                          });
+                          Object.keys(expensesByShift).forEach(sName => {
+                              const key = `${entry.date}-${sName}`;
+                              if (!healedMap[key]) {
+                                  const isMainAdmin = sName === 'إدارة';
+                                  healedMap[key] = {
+                                      ...entry,
+                                      id: isMainAdmin ? entry.id : `${entry.date}-${sName}`,
+                                      shift: sName,
+                                      user: expensesByShift[sName][0].userName || (isMainAdmin ? entry.user : 'system'),
+                                      expenses: expensesByShift[sName],
+                                      sales: isMainAdmin ? Number(entry.sales) : 0
+                                  };
+                              }
+                          });
+                      }
+                    });
+                    cloudVal = Object.values(healedMap);
+                  }
+
+                  if (item.key === 't1t_expense_categories') {
+                    // 🧠 Smart Merge: Ensure categories in code (DEFAULT_CATEGORIES) coexist with cloud categories
+                    const cloudList = Array.isArray(cloudVal) ? cloudVal : [];
+                    const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...cloudList])).filter(Boolean);
+                    cloudVal = merged;
+                  }
+
+                  item.set(cloudVal);
+                  if (window.db) window.db.set(item.key, cloudVal);
+                  else localStorage.setItem(item.key, JSON.stringify(cloudVal));
                 }
-              }
-            });
+
+                // 🆕 Per-Shift Draft Sync (Real isolation)
+                if (row.key.startsWith('t1t_draft_')) {
+                   setLiveDrafts(prev => ({ ...prev, [row.key]: row.value }));
+                }
+              });
             }
           } catch (e) { console.error('Cloud Sync Error:', e); }
         }
@@ -246,12 +316,29 @@ function App() {
           // 🛡️ Null Safety & Flicker Guard
           const updateIfChanged = (keyName, currentVal, setter) => {
             if (key === keyName) {
-              // Ensure we don't set important states to null accidentally after reset
               let safeValue = value;
               if (value === null || value === undefined) {
-                if (keyName === 't1t_currentEntry') safeValue = INITIAL_ENTRY;
-                else if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(keyName)) safeValue = [];
-                else return; // Don't update if we don't have a safe fallback
+                if (['t1t_records', 't1t_daily_reports', 't1t_monthly_reports', 't1t_orders', 't1t_debtors'].includes(keyName)) safeValue = [];
+                else return; 
+              }
+
+              // 🧠 Smart Merge: Entries merge by timestamp
+              if (keyName === 't1t_records') {
+                  const merged = mergeEntries(currentVal, safeValue);
+                  if (JSON.stringify(merged) !== JSON.stringify(currentVal)) {
+                    setter(merged);
+                  }
+                  return;
+              }
+
+              // 🧠 Smart Merge: Categories merge with code-defaults
+              if (keyName === 't1t_expense_categories') {
+                 const cloudList = Array.isArray(safeValue) ? safeValue : [];
+                 const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...cloudList])).filter(Boolean);
+                 if (JSON.stringify(merged) !== JSON.stringify(currentVal)) {
+                    setter(merged);
+                 }
+                 return;
               }
 
               const cloudStr = JSON.stringify(safeValue);
@@ -267,9 +354,27 @@ function App() {
           updateIfChanged('t1t_monthly_reports', monthlyReports, setMonthlyReports);
           updateIfChanged('t1t_orders', orders, setOrders);
           updateIfChanged('t1t_debtors', debtors, setDebtors);
-          updateIfChanged('t1t_currentEntry', currentEntry, setCurrentEntry);
+          // updateIfChanged('t1t_currentEntry', currentEntry, setCurrentEntry); // 🚫 Stop syncing global
           updateIfChanged('t1t_system_users', systemUsers, setSystemUsers);
           updateIfChanged('t1t_expense_categories', expenseCategories, setExpenseCategories);
+          updateIfChanged('t1t_last_finalized_date', lastFinalizedDate, setLastFinalizedDate);
+          
+          // 🆕 Live Draft Sync Logic
+          if (key.startsWith('t1t_draft_')) {
+             setLiveDrafts(prev => ({ ...prev, [key]: value }));
+             
+             // 🛡️ CRITICAL FIX: Disabled real-time overwrite of currentEntry to stop data reverting.
+             // Local session is the source of truth; cloud is for storage and other users (liveDrafts).
+             /* 
+             if (currentUser && key === getDraftKey(currentUser.shift)) {
+                const safeValue = value || { ...INITIAL_ENTRY, user: currentUser.username, shift: currentUser.shift };
+                if (safeValue.user !== currentUser.username) safeValue.user = currentUser.username;
+                if (JSON.stringify(safeValue) !== JSON.stringify(currentEntry)) {
+                  setCurrentEntry(safeValue);
+                }
+             }
+             */
+          }
 
           // 🚨 GLOBAL KILL SWITCH: If this key changes, force all sessions to expire
           if (key === 't1t_kill_switch') {
@@ -350,15 +455,21 @@ function App() {
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_monthly_reports', monthlyReports); }, [monthlyReports, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_orders', orders); }, [orders, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_debtors', debtors); }, [debtors, isDataLoaded]);
+  // 🛡️ NUKED: Global currentEntry/currentUser cloud sync to prevent cross-device flickering.
+  // These stay strictly local-only or isolated in t1t_draft_*.
+  // useEffect(() => { if (isDataLoaded) saveToDB('t1t_currentEntry', currentEntry); }, [currentEntry, isDataLoaded]);
+  
+  // 🆕 Save to My Specific Draft Key (Isolated by Date & Shift)
   useEffect(() => { 
-    if (isDataLoaded) {
-      saveToDB('t1t_isLoggedIn', isLoggedIn);
-      saveToDB('t1t_currentUser', currentUser);
+    if (isDataLoaded && currentUser?.shift && isLoggedIn && currentEntry.date) {
+       const myKey = getDraftKey(currentUser.shift, currentEntry.date);
+       if (myKey) saveToDB(myKey, currentEntry);
     }
-  }, [isLoggedIn, currentUser, isDataLoaded]);
-  useEffect(() => { if (isDataLoaded) saveToDB('t1t_currentEntry', currentEntry); }, [currentEntry, isDataLoaded]);
+  }, [currentEntry, isDataLoaded, isLoggedIn, currentUser]);
+
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_system_users', systemUsers); }, [systemUsers, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) saveToDB('t1t_expense_categories', expenseCategories); }, [expenseCategories, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded && lastFinalizedDate) saveToDB('t1t_last_finalized_date', lastFinalizedDate); }, [lastFinalizedDate, isDataLoaded]);
 
   // 🛡️ Security Migration: Removed legacy plain-text migration to prevent overwrites
 
@@ -461,32 +572,8 @@ function App() {
       });
     }
 
-    // 🛡️ Super Admin Default View: Merge all of today's shifts immediately upon login
-    if (user.role === 'super') {
-      const dayEntries = entries.filter(e => e.date === today);
-      if (dayEntries.length > 0) {
-        setCurrentEntry({
-          ...INITIAL_ENTRY,
-          id: dayEntries[0].id,
-          date: today,
-          shift: 'إدارة',
-          user: user.username,
-          sales: dayEntries.reduce((s, e) => s + Number(e.sales), 0),
-          expenses: dayEntries.flatMap(e => e.expenses.map((exp, idx) => ({
-            ...exp,
-            // 🛡️ Absolute Uniqueness: Append shift + index + random string to guarantee no duplicates
-            id: exp.id === 'fixed-daily' 
-                ? `fixed-daily-${e.shift}` 
-                : `${exp.id}-${e.shift}-${idx}`,
-            originalId: exp.id, // Keep track of original ID type
-            shiftName: e.shift,
-            userName: e.user
-          }))),
-          isDailyFinalized: dayEntries.some(e => e.isDailyFinalized)
-        });
-        return;
-      }
-    }
+    // Super Admin and Standard User now both follow the same logic: Load their specific shift's data
+    // (Super Admins still see aggregate totals in the UI, but their 'currentEntry' stays separate)
 
     // Standard User or Admin with no today's data yet
     const existingEntry = entries.find(e => 
@@ -499,12 +586,43 @@ function App() {
       setCurrentEntry(existingEntry);
       showToast('وردية منتهية', `مرحباً بك، يمكنك مراجعة ورديتك: ${user.shift}`, 'success');
     } else {
-      setCurrentEntry({
-        ...INITIAL_ENTRY,
-        user: user.username,
-        shift: user.shift,
-        date: today
-      });
+      // 🚀 Load Draft from Cloud/DB for this specific shift
+      const draftKey = getDraftKey(user.shift);
+      let savedDraft = null;
+
+      // Try Local (fastest)
+      if (window.db) {
+         // Electron
+         window.db.get(draftKey).then(val => { if(val) setCurrentEntry(val); });
+      } else {
+         // Browser
+         const local = localStorage.getItem(draftKey);
+         if (local) { try { savedDraft = JSON.parse(local); } catch(e){} }
+      }
+      
+      // Try Cloud (if Pro) - checking liveDrafts state which might have loaded
+      if (!savedDraft && liveDrafts[draftKey]) {
+          savedDraft = liveDrafts[draftKey];
+      }
+
+      // If fresh from cloud
+      if (!savedDraft && !IS_DEMO_MODE) {
+         supabase.from('t1t_system_data').select('*').eq('key', draftKey).single().then(({ data }) => {
+            if (data?.value) setCurrentEntry(data.value);
+         });
+      }
+
+      if (savedDraft) {
+         // 🛡️ Fix: Always use the logged-in user's name even if the draft was saved by someone else (or an old name)
+         setCurrentEntry({ ...savedDraft, user: user.username });
+      } else {
+         setCurrentEntry({
+            ...INITIAL_ENTRY,
+            user: user.username,
+            shift: user.shift,
+            date: today
+         });
+      }
       showToast('تم الدخول', `مرحباً بك، شيفتك: ${user.shift}`, 'success');
     }
   };
@@ -514,6 +632,13 @@ function App() {
       window.scrollTo(0, 0);
     }
   }, [isLoggedIn]);
+
+  // 🛡️ Data Integrity Safeguard: Ensure currentEntry always has a shift assigned
+  useEffect(() => {
+    if (isLoggedIn && currentUser && !currentEntry.shift && isDataLoaded) {
+      setCurrentEntry(prev => ({ ...prev, shift: currentUser.shift, user: currentUser.username }));
+    }
+  }, [currentEntry.shift, isLoggedIn, currentUser, isDataLoaded]);
 
   // 🛡️ Auto-Logout on Inactivity (30 Minutes)
   useEffect(() => {
@@ -573,17 +698,29 @@ function App() {
     setCurrentEntry(newVal);
     setHasExported(false);
 
-    // 🛡️ Super Admin Auto-Sync (Real-time update of detailed records only)
-    if (currentUser?.role === 'super' && newVal.date) {
-      const targetDate = newVal.date;
-
-      // sync to Entries list to preserve Admin edits, but DON'T sync to dailyReports yet.
-      // Monthly view and Reports wait for the explicit "Finalize Day" action.
-      setEntries(prev => {
-        const otherDays = prev.filter(e => e.date !== targetDate);
-        return [{ ...newVal, isDailyFinalized: true }, ...otherDays];
-      });
+    // 🛡️ Persistence: Only sync to the specific draft key (Private workspace)
+    if (currentUser?.shift && isLoggedIn) {
+      saveToDB(getDraftKey(currentUser.shift), newVal);
     }
+  };
+
+  // 🧠 Smart-Merge Logic: Prevents old cloud data from clobbering new local data
+  const mergeEntries = (localArr, cloudArr) => {
+    const combined = [...(localArr || []), ...(cloudArr || [])];
+    const map = {};
+    
+    combined.forEach(entry => {
+       if (!entry.date || !entry.shift) return;
+       const key = `${entry.date}-${entry.shift}-${entry.user || 'anon'}`;
+       const existing = map[key];
+       
+       // Priority: 1. Newer timestamp, 2. Existing local if timestamps are missing
+       if (!existing || (new Date(entry.lastModified || 0) > new Date(existing.lastModified || 0))) {
+         map[key] = entry;
+       }
+    });
+    
+    return Object.values(map).sort((a,b) => b.date.localeCompare(a.date));
   };
 
   const saveExpense = (expenseToSave = null) => {
@@ -699,7 +836,10 @@ function App() {
       'إنهاء الوردية',
       'هل أنت متأكد من إنهاء الوردية الحالية وتسجيل الخروج؟',
       () => {
-        setEntries([currentEntry, ...entries]);
+        const finalizedRecord = { ...currentEntry, lastModified: new Date().toISOString() };
+        // Use merging logic locally first
+        setEntries(prev => mergeEntries(prev, [finalizedRecord]));
+        
         setIsLoggedIn(false);
         setCurrentUser(null);
         setCurrentEntry({
@@ -723,7 +863,21 @@ function App() {
   const handleFinalizeDay = () => {
     // Use the date currently being viewed/edited by the Admin
     const targetDate = currentEntry.date;
-    const targetEntries = entries.filter(e => e.date === targetDate);
+    // 🛡️ Logic Refined: For Super Admins, ensure their active currentEntry (Admin Shift) 
+    // is included in the finalization, even if not yet saved to the entries array.
+    let targetEntries = entries.filter(e => e.date === targetDate);
+    
+    if (currentUser?.role === 'super' && currentEntry.date === targetDate) {
+      // Replace or add the Admin's own current work to the calculation
+      const others = targetEntries.filter(e => e.shift !== 'إدارة');
+      targetEntries = [currentEntry, ...others];
+      
+      // Also update the entries list so it's persisted permanently
+      setEntries(prev => {
+        const adminFinalized = { ...currentEntry, isDailyFinalized: true, lastModified: new Date().toISOString() };
+        return mergeEntries(prev, [adminFinalized]);
+      });
+    }
     
     if (targetEntries.length === 0) {
       showToast('تنبيه', `لا توجد ورديات مسجلة ليوم ${targetDate} لإغلاقها!`, 'warning');
@@ -760,7 +914,7 @@ function App() {
 
     // 2. Mark entries as finalized for that specific date
     setEntries(prevEntries => prevEntries.map(e => 
-      e.date === targetDate ? { ...e, isDailyFinalized: true } : e
+      e.date === targetDate ? { ...e, isDailyFinalized: true, lastModified: new Date().toISOString() } : e
     ));
 
     showToast('تم الحفظ', `تم إغلاق وتحديث تقرير يوم ${targetDate} بنجاح`, 'success');
@@ -816,6 +970,72 @@ function App() {
     showToast('تم تصدير اليوم ', `تم استخراج تقرير يوم ${targetDate} بنجاح`, 'success');
   };
 
+  const exportMonthlyData = (currentMonthStr) => {
+    const items = dailyReports.filter(r => isInFiscalMonth(r.date, currentMonthStr)).sort((a,b) => b.date.localeCompare(a.date));
+    const monthlyOrders = orders.filter(o => isInFiscalMonth(o.date, currentMonthStr));
+    
+    // Re-calculate breakdown for Excel
+    const monthlyEntries = entries.filter(e => isInFiscalMonth(e.date, currentMonthStr));
+    const breakdown = {};
+    const allDetailedExpenses = []; 
+
+    // 1. Details
+    monthlyEntries.forEach(entry => {
+      entry.expenses.forEach(exp => {
+        const itemName = exp.id === 'fixed-daily' ? 'اليوميات' : exp.item;
+        const amount = Number(exp.amount) || 0;
+        if (amount > 0 || exp.id === 'fixed-daily') {
+          breakdown[itemName] = (breakdown[itemName] || 0) + amount;
+          allDetailedExpenses.push([
+            entry.date,
+            itemName,
+            amount,
+            entry.shift,
+            entry.user
+          ]);
+        }
+      });
+    });
+
+    const totalSales = items.reduce((s, r) => s + Number(r.sales), 0);
+    const totalExp = items.reduce((s, r) => s + Number(r.expenses), 0);
+    const totalOrders = monthlyOrders.reduce((s, o) => s + Number(o.price), 0);
+
+    exportDetailedExcel({
+      title: `تقرير أداء شهر ${currentMonthStr}`,
+      filename: `T1T_Monthly_Analysis_${currentMonthStr}.xlsx`,
+      summaryData: [
+        { label: "إجمالي مبيعات الشهر", value: totalSales, color: 'FF064E3B' },
+        { label: "إجمالي خوارج اليوميات", value: totalExp, color: 'FFB91C1C' },
+        { label: "إجمالي مشتريات المخازن", value: totalOrders, color: 'FFD97706' },
+        { label: "صافي الأرباح النهائى", value: totalSales - totalExp - totalOrders, color: 'FF0F172A' }
+      ],
+      dataBlocks: [
+        {
+          title: "تحليل المصروفات (الخوارج) حسب النوع - مجمع",
+          headers: ["بند المصروف", "إجمالي الصرف الشهري"],
+          rows: Object.entries(breakdown).sort((a,b) => b[1] - a[1]).map(([item, amount]) => [item, amount])
+        },
+        {
+          title: "سجل الإيرادات اليومية المجمعة",
+          headers: ["التاريخ", "المبيعات", "الخوارج", "الصافي اليومي"],
+          rows: items.map(r => [r.date, r.sales, r.expenses, r.net])
+        },
+        {
+          title: "بيان مشتريات المخازن (الطلبيات)",
+          headers: ["التاريخ", "البيان", "التاجر", "القيمة"],
+          rows: monthlyOrders.map(o => [o.date, o.item, o.supplier, o.price])
+        },
+        {
+          title: "بيان الخوارج اليومية المفصلة (للشهر بالكامل)",
+          headers: ["البيان", "المبلغ", "الوردية", "المسؤول"],
+          rows: allDetailedExpenses.sort((a,b) => a[0].localeCompare(b[0]))
+        }
+      ]
+    });
+    showToast('تم التصدير', 'تم استخراج التقرير الشهري التحليلي بنجاح', 'success');
+  };
+
   const handleFinalizeMonth = () => {
     const targetMonth = viewMonth;
     
@@ -848,6 +1068,9 @@ function App() {
   };
 
   const performFinalizeMonth = (currentMonth, monthlyItems) => {
+    
+    // 1️⃣ أول خطوة: التصدير التلقائي للشيت الإكسيل عشان مفيش حاجة تضيع
+    exportMonthlyData(currentMonth);
 
     const totalSales = monthlyItems.reduce((s, r) => s + Number(r.sales), 0);
     const totalExpenses = monthlyItems.reduce((s, r) => s + Number(r.expenses), 0);
@@ -864,6 +1087,9 @@ function App() {
 
     setMonthlyReports(prev => [newMonthlyReport, ...prev.filter(m => m.month !== currentMonth)]);
     
+    // 2️⃣ Record the exact timestamp of this action to reset the Orders page precisely
+    setLastFinalizedDate(new Date().toISOString());
+
     // 🏠 Reset Today's Entry to zero (This provides the "Clean Start" feeling)
     setCurrentEntry({
       ...INITIAL_ENTRY,
@@ -872,49 +1098,105 @@ function App() {
 
 
     
-    showToast('تم إغلاق الشهر', `تم ترحيل حسابات شهر ${currentMonth} للأرشيف وتصفير النظام للدورة الجديدة`, 'success');
+    showToast('تم إغلاق الشهر', `تم ترحيل حسابات شهر ${currentMonth} للأرشيف بنجاح`, 'success');
     if (window.db) window.db.backup('monthly_final');
   };
 
   // Aggregated Today's data (Grouped by Category for Super Admin review)
   const activeViewDate = currentEntry.date;
-  const viewDateEntries = entries.filter(e => e.date === activeViewDate);
+  
+  // Sources of Truth for Admin View:
+  // 1. Finalized Entries (`entries`) for this date
+  // 2. Live Drafts (`liveDrafts`) for this date (if not finalized)
+  // 3. My Current Entry (`currentEntry`) - Admin's own draft
+  
+  const finalizedEntries = entries.filter(e => e.date === activeViewDate);
   const existingReport = dailyReports.find(r => r.date === activeViewDate);
 
-  const todayTotalSales = viewDateEntries.length > 0 
-    ? viewDateEntries.reduce((s, e) => s + Number(e.sales), 0)
-    : Number(existingReport?.sales || 0);
-
-  const todayTotalExp = viewDateEntries.length > 0 
-    ? viewDateEntries.reduce((s, e) => s + e.expenses.reduce((sx, ex) => sx + Number(ex.amount || 0), 0), 0)
-    : Number(existingReport?.expenses || 0);
+  // Helper to check if a shift is already finalized
+  const isShiftFinalized = (shiftName) => finalizedEntries.some(e => e.shift === shiftName);
   
-  const todayAllExpenses = (() => {
-    const breakdown = {};
-    
-    if (viewDateEntries.length > 0) {
-      viewDateEntries.forEach(entry => {
-        entry.expenses.forEach(exp => {
-          const itemName = exp.id === 'fixed-daily' ? 'اليوميات' : exp.item;
-          const amount = Number(exp.amount) || 0;
-          if (amount > 0 || exp.id === 'fixed-daily') {
-            breakdown[itemName] = (breakdown[itemName] || 0) + amount;
-          }
-        });
-      });
-    } else if (existingReport) {
-      // Fallback to summary from report
-      breakdown['مصروفات عامة (مؤرشفة)'] = Number(existingReport.expenses) || 0;
-    }
+  // 🛡️ Admin Aggregation Logic: 
+  // If I am Admin and viewing the Admin shift, my currentEntry IS the truth for the 'إدارة' shift.
+  const iAmAdmin = currentUser?.role === 'super' || currentUser?.shift === 'إدارة';
+  const isAdminShiftBeingViewed = currentEntry.shift === 'إدارة';
 
-    return Object.entries(breakdown).map(([item, amount]) => ({
-      id: item === 'اليوميات' ? 'fixed-daily' : item,
-      item: item,
-      amount: amount,
-      shiftName: 'إجمالي اليوم',
-      userName: 'نظام'
+  // Get Active Drafts that are NOT yet finalized (Exclude my own current draft to prevent double counting)
+  const activeDrafts = Object.values(liveDrafts).filter(d => 
+      d && d.date === activeViewDate && !isShiftFinalized(d.shift) && d.shift !== currentUser?.shift
+  );
+
+  // Combine All Data Sources
+  // 1. Finalized or Archived
+  let finalizedSales = 0;
+  let finalizedExp = 0;
+  let finalizedExpList = [];
+
+  if (finalizedEntries.length > 0) {
+      // 🛡️ Aggregator Fix: Exclude the Admin shift from finalized list if Admin is currently editing it
+      const entriesToAggregate = (iAmAdmin && isAdminShiftBeingViewed) 
+        ? finalizedEntries.filter(e => e.shift !== 'إدارة')
+        : finalizedEntries;
+
+      finalizedSales = entriesToAggregate.reduce((s, e) => s + Number(e.sales), 0);
+      finalizedExp = entriesToAggregate.reduce((s, e) => s + e.expenses.reduce((sx, ex) => sx + Number(ex.amount || 0), 0), 0);
+      finalizedExpList = entriesToAggregate.flatMap(e => e.expenses.map(exp => ({ 
+          ...exp, 
+          shiftName: exp.shiftName || e.shift, 
+          userName: exp.userName || e.user 
+      })));
+  } else if (existingReport) {
+      finalizedSales = Number(existingReport.sales || 0);
+      finalizedExp = Number(existingReport.expenses || 0);
+      finalizedExpList = [{ id: 'fixed-daily', item: 'أرشيف سابق', amount: finalizedExp, shiftName: 'أرشيف', userName: 'System' }];
+  }
+
+  // 2. Active Drafts (Other Shifts)
+  const draftSales = activeDrafts.reduce((s, d) => s + Number(d.sales), 0);
+  const draftExp = activeDrafts.reduce((s, d) => s + (d.expenses?.reduce((sx, ex) => sx + Number(ex.amount || 0), 0) || 0), 0);
+  const draftExpList = activeDrafts.flatMap(d => (d.expenses || []).map(exp => ({ 
+      ...exp, 
+      shiftName: exp.shiftName || d.shift, 
+      userName: exp.userName || d.user 
+  })));
+
+  // 3. My Draft (Admin)
+  const mySales = (iAmAdmin && isAdminShiftBeingViewed) ? Number(currentEntry.sales || 0) : 0;
+  
+  // 🛡️ Filter: Only show Admin's own items if they actually have an amount or aren't just empty placeholder
+  const myExpRaw = (iAmAdmin && isAdminShiftBeingViewed) ? (currentEntry.expenses || []) : [];
+  const myExpList = myExpRaw
+    .filter(ex => Number(ex.amount) > 0) 
+    .map(exp => ({ 
+        ...exp, 
+        shiftName: exp.shiftName || currentUser.shift, 
+        userName: exp.userName || currentUser.username 
     }));
-  })();
+
+  const todayTotalSales = finalizedSales + draftSales + mySales;
+  
+  // 🛡️ Deduplicate All Expenses & Filter out Zeros
+  const rawAllExpenses = [...finalizedExpList, ...draftExpList, ...myExpList];
+  const uniqueExpensesMap = {};
+  
+  rawAllExpenses.forEach(ex => {
+    const amount = Number(ex.amount) || 0;
+    if (amount <= 0) return; // Keep the board clean
+
+    const sName = (ex.shiftName || 'غير محدد').trim();
+    const uName = (ex.userName || 'غير معروف').trim();
+    
+    // Unique key: Combine originalId/id with shift to handle the same logical expense across sync
+    const baseId = ex.originalId || ex.id;
+    const uniqueId = `${baseId}-${sName}`; 
+    
+    if (!uniqueExpensesMap[uniqueId]) {
+        uniqueExpensesMap[uniqueId] = { ...ex, shiftName: sName, userName: uName, amount };
+    }
+  });
+
+  const todayAllExpenses = Object.values(uniqueExpensesMap);
+  const todayTotalExp = todayAllExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
 
   if (!isDataLoaded) {
     return (
@@ -931,62 +1213,67 @@ function App() {
     );
   }
 
-  // 🗓️ Date Navigation for Admin
+  // 🗓️ Date Navigation
   const handleDateChange = (newDate) => {
-    // 🔍 1. Try to find detailed entries first
-    const dayEntries = entries.filter(e => e.date === newDate);
     
-    if (dayEntries.length > 0) {
-      const mergedEntry = {
-        ...INITIAL_ENTRY,
-        id: dayEntries[0].id,
-        date: newDate,
-        shift: 'إدارة',
-        user: currentUser?.username || 'Admin',
-        sales: dayEntries.reduce((s, e) => s + Number(e.sales), 0),
-        expenses: dayEntries.flatMap(e => e.expenses.map((exp, idx) => ({
-          ...exp,
-          // 🛡️ Absolute Uniqueness: Append shift + index + random string to guarantee no duplicates
-          id: exp.id === 'fixed-daily' 
-              ? `fixed-daily-${e.shift}` 
-              : `${exp.id}-${e.shift}-${idx}`,
-          originalId: exp.id,
-          shiftName: e.shift,
-          userName: e.user
-        }))),
-        isDailyFinalized: dayEntries.some(e => e.isDailyFinalized)
-      };
-      
-      setCurrentEntry(mergedEntry);
-      showToast('عرض سجل', `تم تجميع بيانات يوم ${newDate}`, 'info');
-    } else {
-      // 🔍 2. Fallback: Check if we have a summary report (e.g. seeded data or old archives)
-      const existingReport = dailyReports.find(r => r.date === newDate);
-      
-      if (existingReport) {
-        // Reconstruct entry from report summary
-        const recoveredEntry = {
-          ...INITIAL_ENTRY,
-          id: Date.now(),
-          date: newDate,
-          shift: 'إدارة',
-          user: existingReport.finalizedBy || 'System',
-          sales: Number(existingReport.sales) || 0,
-          expenses: [{ id: 'fixed-daily', item: 'إجمالي مصاريف سابق', amount: Number(existingReport.expenses) || 0 }], 
-          isDailyFinalized: true
-        };
-        setCurrentEntry(recoveredEntry);
-        showToast('أرشيف', `تم استرجاع ملخص بيانات يوم ${newDate}`, 'info');
-      } else {
-        // 3. New Day
-        setCurrentEntry({
-          ...INITIAL_ENTRY,
-          date: newDate,
-          shift: 'إدارة',
-          user: currentUser?.username || ''
-        });
-        showToast('يوم جديد', `جاهز لتسجيل بيانات يوم ${newDate}`, 'info');
-      }
+    // 🛡️ Priority 1: Check if there's an ACTIVE DRAFT for this date in the cloud/local
+    const draftKey = getDraftKey(currentUser?.shift || 'إدارة', newDate);
+    const cloudDraft = liveDrafts[draftKey];
+    
+    if (cloudDraft && JSON.stringify(cloudDraft) !== JSON.stringify(INITIAL_ENTRY)) {
+        setCurrentEntry(cloudDraft);
+        showToast('مسودة محفوظة', `جاري متابعة وردية يوم ${newDate}`, 'success');
+        return;
+    }
+
+    // 🅰️ ADMIN LOGIC (Archive Fallback)
+    if (currentUser?.role === 'super') {
+        // Find ONLY the Admin's specific entry for this day
+        const adminEntry = entries.find(e => e.date === newDate && (e.shift === 'إدارة' || e.user === 'admin'));
+        
+        if (adminEntry) {
+          setCurrentEntry({ ...adminEntry, shift: 'إدارة' }); // Ensure shift is 'إدارة'
+          showToast('سجل الإدارة', `تم تحميل سجل الإدارة ليوم ${newDate}`, 'info');
+        } else {
+          // Check if there's an old report (fallback)
+          const existingReport = dailyReports.find(r => r.date === newDate);
+          if (existingReport && entries.filter(e => e.date === newDate).length === 0) {
+              // Legacy fallback only if no individual entries exist
+              setCurrentEntry({
+                ...INITIAL_ENTRY,
+                date: newDate,
+                shift: 'إدارة',
+                user: currentUser?.username || 'Admin',
+                sales: Number(existingReport.sales) || 0,
+                expenses: [{ id: 'fixed-daily', item: 'إجمالي قديم', amount: Number(existingReport.expenses) || 0 }]
+              });
+          } else {
+              // New separate Admin entry
+              setCurrentEntry({
+                ...INITIAL_ENTRY,
+                date: newDate,
+                shift: 'إدارة',
+                user: currentUser?.username || 'Admin'
+              });
+              showToast('يوم جديد', `جاهز لإضافات الإدارة ليوم ${newDate}`, 'info');
+          }
+        }
+    } 
+    // 🅱️ STANDARD USER LOGIC (Remains the same)
+    else {
+        const myFinalizedEntry = entries.find(e => e.date === newDate && e.shift === currentUser.shift);
+        if (myFinalizedEntry) {
+            setCurrentEntry(myFinalizedEntry);
+            showToast('سجل سابق', `تم تحميل ورديتك ليوم ${newDate}`, 'info');
+        } else {
+            setCurrentEntry({
+                ...INITIAL_ENTRY,
+                date: newDate,
+                shift: currentUser.shift,
+                user: currentUser.username
+            });
+            showToast('تغيير التاريخ', `جاري العمل على يوم ${newDate}`, 'info');
+        }
     }
   };
 
@@ -1061,7 +1348,7 @@ function App() {
             {/* User Badge */}
             <div className="user-badge">
                <User size={18} />
-               <span>{currentEntry.user ? currentEntry.user.charAt(0).toUpperCase() + currentEntry.user.slice(1) : ''}</span>
+               <span>{currentUser?.username ? currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1) : ''}</span>
             </div>
 
             {/* Shift Badge */}
@@ -1136,7 +1423,7 @@ function App() {
                 todayAllExpenses={todayAllExpenses}
                 onFinalizeDay={handleFinalizeDay}
                 onExportDaily={handleExportDaily}
-                isAlreadyFinished={entries.some(e => e.date === currentEntry.date && e.shift === currentEntry.shift && !e.isDailyFinalized)}
+                isAlreadyFinished={entries.some(e => e.date === currentEntry.date && e.shift === currentEntry.shift && e.isDailyFinalized)}
                 showToast={showToast}
                 expenseCategories={expenseCategories}
                 onDateChange={handleDateChange}
@@ -1153,74 +1440,7 @@ function App() {
                 
                 onFinalizeMonth={handleFinalizeMonth}
 
-                onExportDaily={() => {
-                  const currentMonthStr = viewMonth;
-                  const items = dailyReports.filter(r => isInFiscalMonth(r.date, currentMonthStr)).sort((a,b) => b.date.localeCompare(a.date));
-                  const monthlyOrders = orders.filter(o => isInFiscalMonth(o.date, currentMonthStr));
-                  
-                  // Re-calculate breakdown for Excel
-                  const monthlyEntries = entries.filter(e => isInFiscalMonth(e.date, currentMonthStr));
-                  const breakdown = {};
-                  const allDetailedExpenses = []; 
-
-                  // 1. Details
-                  monthlyEntries.forEach(entry => {
-                    entry.expenses.forEach(exp => {
-                      const itemName = exp.id === 'fixed-daily' ? 'اليوميات' : exp.item;
-                      const amount = Number(exp.amount) || 0;
-                      if (amount > 0 || exp.id === 'fixed-daily') {
-                        breakdown[itemName] = (breakdown[itemName] || 0) + amount;
-                        allDetailedExpenses.push([
-                          entry.date,
-                          itemName,
-                          amount,
-                          entry.shift,
-                          entry.user
-                        ]);
-                      }
-                    });
-                  });
-
-
-
-                  const totalSales = items.reduce((s, r) => s + Number(r.sales), 0);
-                  const totalExp = items.reduce((s, r) => s + Number(r.expenses), 0);
-                  const totalOrders = monthlyOrders.reduce((s, o) => s + Number(o.price), 0);
-
-                  exportDetailedExcel({
-                    title: `تقرير أداء شهر ${currentMonthStr}`,
-                    filename: `T1T_Monthly_Analysis_${currentMonthStr}.xlsx`,
-                    summaryData: [
-                      { label: "إجمالي مبيعات الشهر", value: totalSales, color: 'FF064E3B' },
-                      { label: "إجمالي خوارج اليوميات", value: totalExp, color: 'FFB91C1C' },
-                      { label: "إجمالي مشتريات المخازن", value: totalOrders, color: 'FFD97706' },
-                      { label: "صافي الأرباح النهائى", value: totalSales - totalExp - totalOrders, color: 'FF0F172A' }
-                    ],
-                    dataBlocks: [
-                      {
-                        title: "تحليل المصروفات (الخوارج) حسب النوع - مجمع",
-                        headers: ["بند المصروف", "إجمالي الصرف الشهري"],
-                        rows: Object.entries(breakdown).sort((a,b) => b[1] - a[1]).map(([item, amount]) => [item, amount])
-                      },
-                      {
-                        title: "سجل الإيرادات اليومية المجمعة",
-                        headers: ["التاريخ", "المبيعات", "الخوارج", "الصافي اليومي"],
-                        rows: items.map(r => [r.date, r.sales, r.expenses, r.net])
-                      },
-                      {
-                        title: "بيان مشتريات المخازن (الطلبيات)",
-                        headers: ["التاريخ", "البيان", "التاجر", "القيمة"],
-                        rows: monthlyOrders.map(o => [o.date, o.item, o.supplier, o.price])
-                      },
-                      {
-                        title: "بيان الخوارج اليومية المفصلة (للشهر بالكامل)",
-                        headers: ["البيان", "المبلغ", "الوردية", "المسؤول"],
-                        rows: allDetailedExpenses.sort((a,b) => a[0].localeCompare(b[0]))
-                      }
-                    ]
-                  });
-                  showToast('تم التصدير', 'تم استخراج التقرير الشهري التحليلي بنجاح', 'success');
-                }}
+                onExportDaily={() => exportMonthlyData(viewMonth)}
               />
 
 
@@ -1228,15 +1448,33 @@ function App() {
 
 
 
-              {activeTab === 'orders' && (
-                <OrdersPage 
-                  orders={orders}
-                  setOrders={setOrders}
-                  userRole={currentUser?.role}
-                  showConfirm={showConfirm}
-                  showToast={showToast}
-                />
-              )}
+              {activeTab === 'orders' && (() => {
+                // Calculate current fiscal month exactly like viewMonth initial state
+                const today = new Date();
+                let year = today.getFullYear();
+                let month = today.getMonth() + 1;
+                if (today.getDate() < 6) {
+                  month -= 1;
+                  if (month === 0) {
+                    month = 12;
+                    year -= 1;
+                  }
+                }
+                const currentFiscalMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+                
+                return (
+                  <OrdersPage 
+                    orders={orders}
+                    setOrders={setOrders}
+                    userRole={currentUser?.role}
+                    showConfirm={showConfirm}
+                    showToast={showToast}
+                    currentFiscalMonthStr={currentFiscalMonthStr}
+                    isInFiscalMonthHelper={isInFiscalMonth}
+                    lastFinalizedDate={lastFinalizedDate}
+                  />
+                );
+              })()}
 
               {activeTab === 'notebook' && (
                 <NotebookPage 
