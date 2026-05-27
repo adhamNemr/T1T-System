@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scan for Menu - Take One Tea</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Cairo", sans-serif;
+        background-color: #f0f2f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .qr-card {
+        background: #ffffff;
+        /* Using the same Mesh Background logic for the card */
+        background-image:
+          radial-gradient(at 0% 0%, rgba(219, 228, 212, 1) 0%, transparent 50%),
+          radial-gradient(
+            at 100% 0%,
+            rgba(241, 233, 200, 1) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            at 50% 50%,
+            rgba(255, 255, 255, 1) 0%,
+            transparent 80%
+          );
+        width: 350px;
+        padding: 40px;
+        text-align: center;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        border: 5px solid #b8982a;
+        outline: 2px solid #1a5c3a;
+        outline-offset: -12px;
+        position: relative;
+      }
+      .logo {
+        max-width: 150px;
+        margin-bottom: 20px;
+        filter: contrast(110%) brightness(105%);
+      }
+      .title {
+        color: #1a5c3a;
+        font-size: 24px;
+        font-weight: 900;
+        margin-bottom: 10px;
+      }
+      .subtitle {
+        color: #b8982a;
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 30px;
+      }
+      .qr-container {
+        background: white;
+        padding: 20px;
+        border-radius: 25px;
+        display: inline-block;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        border: 3px solid #f1e9c8;
+        margin: 10px 0;
+      }
+      .qr-code {
+        width: 220px;
+        height: 220px;
+        display: block;
+      }
+      .footer-text {
+        margin-top: 30px;
+        color: #1a5c3a;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 1px;
+      }
+      .print-btn,
+      .download-btn {
+        margin: 10px 5px;
+        background: #1a5c3a;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 50px;
+        font-family: "Cairo", sans-serif;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.2s;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .download-btn {
+        background: #b8982a;
+      }
+      .print-btn:hover,
+      .download-btn:hover {
+        transform: scale(1.05);
+      }
+      @media print {
+        @page {
+          margin: 0;
+          size: auto;
+        }
+        body {
+          background: white;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+        }
+        .qr-card {
+          box-shadow: none;
+          border: none;
+          outline: none;
+          width: 100%;
+          max-width: 100%;
+          margin: 0;
+          padding: 5px;
+          background: white;
+          position: static;
+          transform: none;
+        }
+        .title,
+        .subtitle,
+        .logo,
+        .footer-text,
+        .print-btn,
+        .download-btn {
+          display: none !important;
+        }
+        .qr-container {
+          border: none;
+          padding: 10vw; /* Safe margin for thermal printer */
+          margin: 0 auto;
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          background: white;
+        }
+        .qr-code {
+          width: 80vw; /* Reduced size to add safety margin */
+          height: 80vw;
+          max-width: none;
+        }
+      }
+    </style>
+    <!-- Library to save as image -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  </head>
+  <body>
+    <div class="qr-card" id="qr-to-print">
+      <img src="logo-removebg-preview.png" alt="Logo" class="logo" />
+      <h1 class="title">تيك وان تي</h1>
+      <p class="subtitle">امسح الكود لعرض المنيو</p>
+
+      <div class="qr-container">
+        <!-- Generating QR code with high contrast and larger internal margin for thermal printer -->
+        <img
+          src="https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://t1t-menu-eight.vercel.app&color=000000&margin=50"
+          alt="QR Code"
+          class="qr-code"
+          id="qr-image"
+        />
+      </div>
+
+      <p class="footer-text">نورتنا في TAKE ONE TEA</p>
+      <div style="margin-top: 20px">
+        <button class="print-btn" onclick="window.print()">طباعة</button>
+        <button class="download-btn" onclick="downloadQR()">
+          تحميل للطباعة
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function downloadQR() {
+        const qrImg = document.getElementById("qr-image");
+        const link = document.createElement("a");
+        link.href = qrImg.src;
+        link.download = "T1T-Menu-QR.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    </script>
+  </body>
+</html>
